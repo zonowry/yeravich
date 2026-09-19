@@ -1,0 +1,96 @@
+import { Button, HorizontalBox, Palette, TextEdit, VerticalBox } from "std-widgets.slint";
+
+export struct UiState {
+    source-language: string,
+    target-language: string,
+    source-text: string,
+    translated-text: string,
+    status: string,
+    busy: bool,
+}
+
+export component MainWindow inherits Window {
+    title: "Yeravich";
+    width: 620px;
+    height: 520px;
+
+    in property <UiState> state;
+    callback source-edited(string);
+    callback translate-requested();
+    callback swap-languages();
+
+    VerticalBox {
+        padding: 24px;
+        spacing: 14px;
+
+        Text {
+            text: "Yeravich";
+            font-size: 28px;
+            font-weight: 700;
+            color: Palette.foreground;
+        }
+
+        HorizontalBox {
+            spacing: 10px;
+            Text {
+                text: root.state.source-language;
+                vertical-alignment: center;
+            }
+            Button {
+                text: "⇄";
+                enabled: !root.state.busy;
+                clicked => { root.swap-languages(); }
+            }
+            Text {
+                text: root.state.target-language;
+                vertical-alignment: center;
+            }
+        }
+
+        TextEdit {
+            text: root.state.source-text;
+            placeholder-text: "Type or capture text to translate";
+            enabled: !root.state.busy;
+            edited(text) => { root.source-edited(text); }
+        }
+
+        HorizontalBox {
+            alignment: end;
+            Text {
+                text: root.state.status;
+                color: Palette.foreground;
+                opacity: 0.65;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: root.state.busy ? "Translating…" : "Translate";
+                primary: true;
+                enabled: !root.state.busy && root.state.source-text != "";
+                clicked => { root.translate-requested(); }
+            }
+        }
+
+        Rectangle {
+            background: Palette.alternate-background;
+            border-radius: 8px;
+            min-height: 150px;
+
+            Text {
+                x: 16px;
+                y: 16px;
+                width: parent.width - 32px;
+                height: parent.height - 32px;
+                text: root.state.translated-text == ""
+                    ? "Translation appears here"
+                    : root.state.translated-text;
+                color: root.state.translated-text == ""
+                    ? Palette.foreground
+                    : Palette.alternate-foreground;
+                opacity: root.state.translated-text == "" ? 0.55 : 1;
+                wrap: word-wrap;
+                vertical-alignment: top;
+            }
+        }
+    }
+}

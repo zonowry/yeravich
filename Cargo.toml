@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/yeravich-app", "crates/yeravich-core"]
 resolver = "3"
 
 [workspace.package]
@@ -10,21 +10,16 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace.dependencies]
-ashpd = { version = "0.12.3", default-features = false, features = ["async-std"] }
-atspi = { version = "0.30", default-features = false, features = ["connection", "proxies"] }
-futures-core = "0.3"
 futures-executor = "0.3"
 futures-util = "0.3"
-iced = { version = "0.14", default-features = false, features = ["tiny-skia", "wayland", "thread-pool"] }
-iced_layershell = { version = "0.19.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
+slint = "=1.16.1"
+slint-build = "=1.16.1"
 thiserror = "2"
-tempfile = "3"
 toml = "0.9"
-wl-clipboard-rs = "0.9"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

@@ -49,6 +49,19 @@ impl AppConfig {
         }
         Ok(config)
     }
+
+    /// Changes the active language pair without involving a UI state machine.
+    pub fn set_languages(&mut self, source: impl Into<String>, target: impl Into<String>) {
+        self.languages = LanguagePair {
+            source: source.into(),
+            target: target.into(),
+        };
+    }
+
+    /// Exchanges the source and target languages.
+    pub fn swap_languages(&mut self) {
+        std::mem::swap(&mut self.languages.source, &mut self.languages.target);
+    }
 }
 
 #[derive(Debug, Error)]

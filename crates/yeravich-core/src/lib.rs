@@ -1,17 +1,10 @@
-//! Platform-independent contracts and state transitions for Yeravich.
+//! UI-independent product capabilities for Yeravich.
 
 mod config;
-mod domain;
-mod ports;
-mod reducer;
+mod translation;
 
 pub use config::{AppConfig, CONFIG_VERSION, ConfigError};
-pub use domain::{
-    Capability, CapabilityError, CapabilityState, LanguagePair, ProviderAdapterDescriptor,
-    ProviderProfile, RequestId, SecretReference, TranslationEvent, TranslationRequest,
+pub use translation::{
+    CoreFuture, LanguagePair, ProviderProfile, SecretReference, SecretStore, SecretStoreError,
+    SecretValue, Translation, TranslationBackend, TranslationError, TranslationRequest, Yeravich,
 };
-pub use ports::{
-    AdapterRegistry, ConfigStore, PortFuture, SecretStore, SelectionReader, ShortcutSource,
-    ShortcutStream, TranslationProvider, TranslationStream,
-};
-pub use reducer::{AppEvent, AppPhase, AppState, Effect, reduce};
