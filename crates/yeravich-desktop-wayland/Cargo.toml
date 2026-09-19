@@ -1,0 +1,20 @@
+[package]
+name = "yeravich-desktop-wayland"
+default-run = "yeravich-desktop-wayland"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+futures-util.workspace = true
+iced.workspace = true
+iced_layershell.workspace = true
+yeravich-compat-hyprland = { path = "../yeravich-compat-hyprland" }
+yeravich-core = { path = "../yeravich-core" }
+yeravich-platform-wayland = { path = "../yeravich-platform-wayland" }
+yeravich-ui = { path = "../yeravich-ui" }
+
+[lints]
+workspace = true

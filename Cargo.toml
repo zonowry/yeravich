@@ -1,0 +1,31 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+ashpd = { version = "0.12.3", default-features = false, features = ["async-std"] }
+atspi = { version = "0.30", default-features = false, features = ["connection", "proxies"] }
+futures-core = "0.3"
+futures-executor = "0.3"
+futures-util = "0.3"
+iced = { version = "0.14", default-features = false, features = ["tiny-skia", "wayland", "thread-pool"] }
+iced_layershell = { version = "0.19.1", default-features = false }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+tempfile = "3"
+toml = "0.9"
+wl-clipboard-rs = "0.9"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

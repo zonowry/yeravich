@@ -1,0 +1,20 @@
+[package]
+name = "yeravich-platform-wayland"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ashpd.workspace = true
+atspi.workspace = true
+yeravich-core = { path = "../yeravich-core" }
+wl-clipboard-rs.workspace = true
+
+[dev-dependencies]
+futures-executor.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
