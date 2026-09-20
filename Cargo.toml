@@ -5,18 +5,18 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.98"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace.dependencies]
-futures-executor = "0.3"
-futures-util = "0.3"
-serde = { version = "1", features = ["derive"] }
-slint = "=1.16.1"
-slint-build = "=1.16.1"
-thiserror = "2"
-toml = "0.9"
+futures-executor = "0.3.34"
+futures-util = "0.3.34"
+serde = { version = "1.0.229", features = ["derive"] }
+slint = "=1.18.0"
+slint-build = "=1.18.0"
+thiserror = "2.0.20"
+toml = "1.1.6"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

@@ -34,6 +34,6 @@ cargo run -p yeravich-app
 
 ## Toolchain note
 
-The workspace MSRV is Rust 1.90. Slint is pinned to 1.16.1 because Slint 1.17 and newer require Rust 1.92. Upgrade Slint when the workspace toolchain is raised.
+The workspace MSRV is Rust 1.98. Slint is pinned to the latest stable release, 1.18.0.
 
 Application ID: `com.zonowry.yeravich`. Suggested future shortcut: `Super+Shift+Y`.
