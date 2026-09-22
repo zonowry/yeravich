@@ -7,6 +7,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use zeroize::Zeroize;
 
 use crate::AppConfig;
 
@@ -27,7 +28,7 @@ impl Default for LanguagePair {
     }
 }
 
-/// Opaque locator for a secret held by the platform's credential store.
+/// Opaque locator for a secret held by the configured credential store.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SecretReference(pub String);
@@ -59,6 +60,12 @@ impl std::fmt::Debug for SecretValue {
     }
 }
 
+impl Drop for SecretValue {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderProfile {
     pub name: String,
@@ -84,7 +91,7 @@ pub struct Translation {
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum SecretStoreError {
-    #[error("the platform secret store is unavailable")]
+    #[error("credential storage is unavailable")]
     Unavailable,
     #[error("the requested credential was not found")]
     NotFound,
@@ -97,6 +104,18 @@ pub trait SecretStore: Send + Sync {
         &self,
         reference: &SecretReference,
     ) -> CoreFuture<Result<SecretValue, SecretStoreError>>;
+
+    fn save(
+        &self,
+        _reference: &SecretReference,
+        _secret: SecretValue,
+    ) -> CoreFuture<Result<(), SecretStoreError>> {
+        Box::pin(async { Err(SecretStoreError::Unavailable) })
+    }
+
+    fn delete(&self, _reference: &SecretReference) -> CoreFuture<Result<(), SecretStoreError>> {
+        Box::pin(async { Err(SecretStoreError::Unavailable) })
+    }
 }
 
 pub trait TranslationBackend: Send + Sync {
@@ -167,6 +186,18 @@ impl Yeravich {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    pub(crate) fn replace_config(&self, config: AppConfig) {
+        *self
+            .inner
+            .config
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = config;
+    }
+
+    pub(crate) fn secrets(&self) -> &dyn SecretStore {
+        self.inner.secrets.as_ref()
     }
 
     pub fn set_languages(&self, source: impl Into<String>, target: impl Into<String>) {

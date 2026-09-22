@@ -1,5 +1,6 @@
 [workspace]
-members = ["crates/yeravich-app", "crates/yeravich-core"]
+members = ["yeravich-app", "crates/yeravich-core"]
+default-members = ["yeravich-app"]
 resolver = "3"
 
 [workspace.package]
@@ -13,10 +14,17 @@ publish = false
 futures-executor = "0.3.34"
 futures-util = "0.3.34"
 serde = { version = "1.0.229", features = ["derive"] }
-slint = "=1.18.0"
-slint-build = "=1.18.0"
+iced = { version = "0.14.0", features = ["advanced-shaping", "tokio"] }
+directories = "6.0.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "system-proxy"] }
+serde_json = "1.0"
+tempfile = "3.23"
+tokio = { version = "1.53", features = ["fs", "io-util", "time", "rt-multi-thread", "macros", "net"] }
+uuid = { version = "1.18", features = ["v4"] }
+zeroize = "1.8"
 thiserror = "2.0.20"
 toml = "1.1.6"
+yeravich-core = { path = "crates/yeravich-core" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
