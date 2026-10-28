@@ -348,7 +348,9 @@ bash scripts/smoke-test-dmg.sh dist/Yeravich-0.0.1-macos-arm64.dmg
 
 这里没有新增 Rust 依赖或所有权逻辑。版本仍来自 `Cargo.toml`；Rust 与发布流程的边界是打包脚本生成的文件，工作流只编排检查、构建和分发。参考 [GitHub 可复用工作流](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) 与 [GitHub CLI 发布命令](https://cli.github.com/manual/gh_release_create)。
 
-本地已通过 actionlint 与 Bash 语法检查，并使用模拟 GitHub CLI 验证版本不匹配、附件缺失或损坏、预发布标记、创建或上传失败、草稿重试及已发布版本保持不变。Rust 格式、Clippy、测试和编译检查也已通过。这些检查没有实际创建 Release；自动发布流程尚待 GitHub 托管环境实际运行验证。
+本地已通过 actionlint 与 Bash 语法检查，并使用模拟 GitHub CLI 验证版本不匹配、附件缺失或损坏、预发布标记、创建或上传失败、草稿重试及已发布版本保持不变。Rust 格式、Clippy、测试和编译检查也已通过。
+
+[v0.0.1 发布运行](https://github.com/zonowry/yeravich/actions/runs/40671111494) 已在 GitHub 托管 runner 上完成 Linux x86_64、macOS arm64 和 x86_64 的代码检查、release 打包及包内启动检查，两个 DMG 均通过固定证书签名验证，并成功发布六个附件。这些检查验证构建与分发流程，不能代替真实桌面的快捷键、焦点、权限授权或升级安装验证。
 
 ### 验证范围
 
@@ -358,7 +360,7 @@ bash scripts/smoke-test-dmg.sh dist/Yeravich-0.0.1-macos-arm64.dmg
 - Hyprland 已检查双栏布局、多行输入、滚动、选择、复制、Enter 提交和错误显示；中文输入法候选确认仍待验证。macOS 新布局及完整键盘交互尚未完成实机验证。
 - Apple Silicon macOS 已在原生文本框和 TextEdit 中验证授权后的未复制选区读取、剪贴板兜底、自动翻译、相同文本复用、聚焦时保留输入、收起和退出。
 - Linux release AppImage 已通过构建和虚拟 X11 启动检查；Apple Silicon release DMG 已通过构建、固定证书签名、校验和及启动检查。Finder 拖拽安装、互联网下载后的 Gatekeeper 提示与升级后的辅助功能授权仍待验证。
-- Linux 托盘已验证收起、恢复、退出及初始化失败时的关闭保护；macOS 托盘实机交互仍待补充。GitHub 托管打包工作流尚未实际触发。
+- Linux 托盘已验证收起、恢复、退出及初始化失败时的关闭保护；macOS 托盘实机交互仍待补充。
 - 尚未建立启动、唤出和常驻资源占用的性能基线；其他桌面、架构与系统版本不在上述实机验证范围内。
 
 ## 后续如何积累学习记录
