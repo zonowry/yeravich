@@ -42,6 +42,8 @@ jobs:
   dmg:
     needs: validate
     uses: ./.github/workflows/dmg.yml
+    # 可复用工作流读取环境 Secrets 也需要显式启用继承。
+    secrets: inherit
 
   publish:
     name: Publish GitHub Release
