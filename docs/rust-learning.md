@@ -56,7 +56,7 @@
 
 常显文案与按需提示也由视图决定：`App::header` 复用 `TranslationPanel::direction`，通过 `.map(Message::Panel)` 把面板消息接回应用；`widgets::hint` 用悬停提示容纳按键和退出说明。`ServiceState`、`translating` 和 `error` 继续决定操作是否可用以及显示什么反馈，隐藏“就绪”文案不会改变翻译状态机。
 
-布局数值不需要新增机械单元测试；原有状态和键盘测试继续验证行为边界。桌面检查应覆盖最小窗口、多行文本、复制、方向切换、中文翻译与错误反馈，当前验证范围见 [README](../README.md#当前进度)。
+布局数值不需要新增机械单元测试；原有状态和键盘测试继续验证行为边界。桌面检查应覆盖最小窗口、多行文本、复制、方向切换、中文翻译与错误反馈，当前验证范围见本文的[验证范围](#验证范围)。
 
 ## 让异步任务持有输入
 
@@ -104,7 +104,7 @@ AX 属性读取会与其他进程通信，因此放在 `tokio::task::spawn_block
 
 `permission(false)` 只检查信任状态；用户点击“选区权限”才调用带 `kAXTrustedCheckOptionPrompt` 的检查并打开系统设置。返回 `false` 不表示用户已经拒绝，也不表示授权弹框已经处理完，重新聚焦或唤出时再次查询。`AccessibilityRequired`、`SelectionUnavailable` 与 `NoText` 分别表达缺少授权、来源不支持/失败和没有选区；即使剪贴板兜底成功，也保留必要的选区失败说明。权限检查不代替输入版本检查，旧读取不能因随后授权而重新生效。
 
-这里的 `Result` 也帮助定位部署问题：`selected_text` 在 `trusted()` 为 `false` 时就返回 `AccessibilityRequired`，此时尚未查询来源应用的焦点元素。即使权限开关已开启，TCC 也可能因旧签名记录拒绝新构建，不能把它当作 `AXSelectedText` 不受支持，更不能把剪贴板兜底成功当作权限已生效。先核对实际运行的 `.app` 和系统授权，再用选区 A、剪贴板 B 不同的测试检查 `Snapshot.primary` 与 `selected=Primary`。重建 ad-hoc 签名应用会改变代码身份，替换已授权的二进制可能让前一次授权失效；处理步骤见 [README](../README.md#macos-划选后直接翻译)。
+这里的 `Result` 也帮助定位部署问题：`selected_text` 在 `trusted()` 为 `false` 时就返回 `AccessibilityRequired`，此时尚未查询来源应用的焦点元素。即使权限开关已开启，TCC 也可能因旧签名记录拒绝新构建，不能把它当作 `AXSelectedText` 不受支持，更不能把剪贴板兜底成功当作权限已生效。先核对实际运行的 `.app` 和系统授权，再用选区 A、剪贴板 B 不同的测试检查 `Snapshot.primary` 与 `selected=Primary`。重建 ad-hoc 签名应用会改变代码身份，替换已授权的二进制可能让前一次授权失效；处理步骤见 [README](../README.md#macos)。
 
 仅在 macOS 引入 `objc2-application-services`，它提供系统 AX 的 Rust 绑定；直接声明已在依赖树中的 `objc2-app-kit`、`objc2-foundation` 和 `objc2-core-foundation`，只开启用到的接口。没有增加外部命令或读取服务，最终仍链接 macOS 自带框架；这些依赖增加构建与 FFI 维护成本，未测量体积、启动或内存变化。参考 [Apple AX 超时说明](https://developer.apple.com/documentation/applicationservices/1459345-axuielementsetmessagingtimeout) 和 [objc2 AX 绑定](https://docs.rs/objc2-application-services/0.3.2/objc2_application_services/)。
 
@@ -124,7 +124,7 @@ AX 属性读取会与其他进程通信，因此放在 `tokio::task::spawn_block
 
 API Key 从 `Option<String>` 经 `as_deref()` 暂时借用为 `Option<&str>`，空白值过滤为 `None`。构建请求头得到 `Option<Result<HeaderValue, _>>`，`transpose()` 把它转换成 `Result<Option<HeaderValue>, _>`，就可以用 `?` 提前返回非法请求头错误。请求头标为敏感值，配置不派生 `Debug`，界面也不显示可能包含密钥的 TOML 原始错误或服务端错误正文。
 
-初版不监听文件变化。服务及其配置由常驻进程持有，修改后需显式退出并重新启动；仅关闭窗口不会重新加载。运行步骤见 [README](../README.md#配置翻译服务)。
+初版不监听文件变化。服务及其配置由常驻进程持有，修改后需显式退出并重新启动；仅关闭窗口不会重新加载。运行步骤见 [README](../README.md#修改配置)。
 
 新增依赖中，`reqwest` 负责 HTTP，关闭默认 feature，仅开启 JSON 与 rustls TLS；`serde`/`toml` 负责数据格式，`dirs` 统一 Windows、macOS 和 Linux 的配置目录，`tokio` 提供网络运行时和后台文件读取。`tempfile` 从测试依赖移到运行依赖，用于跨平台的临时文件清理和不覆盖目标的保存操作，没有新增锁文件中的版本；`serde_json` 仍用于测试和构建脚本。它们增加了依赖、构建和维护成本；当前未测量依赖带来的二进制体积、启动耗时和常驻内存变化。平台验证范围见 README，编译通过不能代替桌面实机验证。相关机制可参考 [Reqwest 客户端](https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html)、[Tokio 文件 I/O](https://docs.rs/tokio/1.48.0/tokio/fs/index.html) 和 [NamedTempFile::persist_noclobber](https://docs.rs/tempfile/latest/tempfile/struct.NamedTempFile.html#method.persist_noclobber)。
 
@@ -134,11 +134,11 @@ macOS 的同一条边界位于 [DMG 打包脚本](../scripts/build-dmg.sh) 和 [
 
 这次没有增加 Rust 运行依赖。`librsvg` 只在打包时把现有 SVG 渲染为不同尺寸的 PNG，macOS 的 `iconutil` 再合成 `.icns`；`codesign` 和 `hdiutil` 分别负责签名与镜像生成。[sign-macos-app.sh](../scripts/sign-macos-app.sh) 使用显式指定的固定证书签名，并检查包完整性及签名中确实包含证书；缺少身份时失败，不回退到 ad-hoc。证书签名不等于 Apple 公证。
 
-签名身份属于发布流程，不应进入 Rust 应用的配置或二进制。CI 从两个 GitHub Secrets 中读取 `.p12` 和密码，将身份导入临时钥匙串，自动解析唯一证书的指纹，再通过环境变量交给打包脚本；应用运行时不持有签名私钥。自签名证书不受系统默认信任，导入阶段不能用 `security find-identity -v` 来判断它是否存在。持续复用证书、应用标识符和兼容的 designated requirement，可以建立版本间的代码身份；是否保留 Accessibility 权限仍须实际升级验证，不能由签名校验推断。证书创建、Secrets 配置及未来公证边界见 [README](../README.md#macos-dmg)。
+签名身份属于发布流程，不应进入 Rust 应用的配置或二进制。CI 从两个 GitHub Secrets 中读取 `.p12` 和密码，将身份导入临时钥匙串，自动解析唯一证书的指纹，再通过环境变量交给打包脚本；应用运行时不持有签名私钥。自签名证书不受系统默认信任，导入阶段不能用 `security find-identity -v` 来判断它是否存在。持续复用证书、应用标识符和兼容的 designated requirement，可以建立版本间的代码身份；是否保留 Accessibility 权限仍须实际升级验证，不能由签名校验推断。证书创建、Secrets 配置及公证边界见本文的[构建与验证](#构建与验证)。
 
 `aarch64-apple-darwin` 与 `x86_64-apple-darwin` 会让 `#[cfg(target_os = "linux")]` 分支在编译时被排除。例如 [shortcut/mod.rs](../src/shortcut/mod.rs) 的 Portal 注册和 [text_capture.rs](../src/text_capture.rs) 的 `wl-paste` 调用不会进入 Mac 程序，Mac 使用原生快捷键、Accessibility 选区和 Iced 剪贴板兜底。因此 DMG 不需要 Linux 的运行库或外部剪贴板工具；两个原生 runner 分别执行检查，可以暴露仅在对应平台出现的编译问题。
 
-平台边界验证应让来源窗口选中 A、剪贴板持有 B，再触发快捷键：已授权时应读取未复制的 A，未授权时应使用 B 并提示授权。通用函数名不意味着所有平台读取方式相同，必须用来源不同的文本验证实际取值。打包脚本还要求把 `lipo` 的输入文件放在 `-verify_arch` 的架构列表之前；这类原生工具行为需在目标系统实际执行，ShellCheck 或 Linux 上的语法检查无法覆盖。验证范围见 [README](../README.md#macos-dmg)。
+平台边界验证应让来源窗口选中 A、剪贴板持有 B，再触发快捷键：已授权时应读取未复制的 A，未授权时应使用 B 并提示授权。通用函数名不意味着所有平台读取方式相同，必须用来源不同的文本验证实际取值。打包脚本还要求把 `lipo` 的输入文件放在 `-verify_arch` 的架构列表之前；这类原生工具行为需在目标系统实际执行，ShellCheck 或 Linux 上的语法检查无法覆盖。验证范围见本文的[验证范围](#验证范围)。
 
 ## 为什么要检查请求版本
 
@@ -221,6 +221,116 @@ Windows/macOS 的图标和菜单不是 `Send`，因此不能移入 `Task::perfor
 `data/tray-icon.rgba` 是现有 `data/com.zonowry.yeravich.svg` 的 32×32 RGBA 导出，使用 `include_bytes!` 嵌入。Linux 转为协议要求的 ARGB 字节序，Windows/macOS 直接传给 `Icon::from_rgba`，不引入运行时图片解码依赖。更新 SVG 后可用 `rsvg-convert -w 32 -h 32 data/com.zonowry.yeravich.svg -o /tmp/yeravich-tray.png`，再用 ImageMagick 的 `magick /tmp/yeravich-tray.png -depth 8 rgba:data/tray-icon.rgba` 重新导出。
 
 依赖边界见 [ksni 的异步接口](https://docs.rs/ksni/0.3.7/ksni/) 与 [tray-icon 的平台要求](https://docs.rs/tray-icon/0.26.1/tray_icon/)。仅 Linux 引入 `ksni`；仅 Windows/macOS 引入关闭默认 feature 的 `tray-icon`，平台模块由 `#[cfg]` 选择。没有引入轮询或为托盘另开应用进程，性能影响仍需 release 测量。
+
+## 构建与验证
+
+日常安装、快捷键与权限设置见 [README](../README.md)。以下内容面向修改代码或自行打包的开发者；打包命令均在仓库根目录执行。
+
+### 本地运行与检查
+
+项目使用 Rust 2024 edition，依赖由 [Cargo.lock](../Cargo.lock) 锁定，工具链与检查要求见 [CI](../.github/workflows/ci.yml)。在图形桌面中运行：
+
+```sh
+cargo run --locked
+```
+
+代码变更按 CI 约定检查：
+
+```sh
+cargo fmt --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+cargo check --workspace --all-targets --all-features
+```
+
+默认测试使用本地模拟 HTTP 服务。下面的测试会向指定服务发送“你好，世界。”并打印译文，需要手动运行：
+
+```sh
+YERAVICH_CONFIG="$PWD/config.example.toml" cargo test configured_service_smoke_test -- --ignored --nocapture
+```
+
+测量性能时使用 `cargo build --release --locked`，再单独运行 `target/release/yeravich`。分别记录冷启动、常驻进程唤出和翻译请求延迟，避免将编译耗时混入测量。
+
+### Linux AppImage 构建
+
+在 Ubuntu 22.04 x86_64、已安装项目 Rust 工具链的环境中执行：
+
+```sh
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config python3 curl file \
+  desktop-file-utils squashfs-tools wl-clipboard \
+  libwayland-dev libxkbcommon-dev libxkbcommon-x11-0 \
+  libx11-6 libx11-xcb1 libxcursor1 libxi6 libxrandr2 \
+  libxinerama1 libxrender1 libxfixes3 libxcb1 \
+  xvfb xauth fonts-noto-cjk
+bash scripts/build-appimage.sh
+bash scripts/smoke-test-appimage.sh
+```
+
+产物在 `dist/`。打包脚本使用 release 构建，固定 linuxdeploy 版本并验证 SHA-256；冒烟检查在虚拟 X11 桌面启动解包后的程序，确认进程持续运行并生成正确的默认配置，不访问真实翻译接口。它不能代替真实桌面的快捷键、焦点、隐藏及唤出验证，也不是启动性能测试。
+
+### macOS DMG 构建
+
+打包使用固定自签名证书，尚未接入 Apple 公证。[DMG 工作流](../.github/workflows/dmg.yml) 和 [AppImage 工作流](../.github/workflows/appimage.yml) 支持手动运行及 `v*` 标签触发，产物上传到 Actions artifacts。
+
+#### 创建固定自签名证书
+
+自签名不需要向 Apple 申请或购买开发者会员。只创建一次，后续版本复用；证书名称会随签名公开，可以使用项目名称。
+
+1. 打开 macOS 的“钥匙串访问”，选择“证书助理 → 创建证书”。
+2. 名称填写 `Yeravich Signing`，身份类型选择 **自签名根证书（Self Signed Root）**，证书类型选择 **代码签名（Code Signing）**。
+3. 勾选“让我覆盖默认值”，设置适合长期维护的有效期（例如 3650 天）及 RSA 3072 或 4096 位密钥，将身份保存到登录钥匙串。
+4. 在“我的证书”中找到该身份，确认可展开看到关联的私钥，再导出为带密码保护的 `.p12`。仅导出 `.cer` 不包含私钥，不能用于签名。
+5. 将 `.p12` 和导出密码备份到自己的安全存储中。不要放进仓库、`private-docs/`、构建产物或日志；不要为每次构建重新生成证书。
+
+可用 `security find-identity -p codesigning` 查看签名身份；自签名不在系统受信任身份列表中，因此这里不加仅列出有效受信任身份的 `-v`。签名时可以按证书名称选择，也可填写该身份的 SHA-1 指纹，后者用于区分同名证书。创建步骤参考 [Apple 证书助理说明](https://support.apple.com/guide/keychain-access/create-self-signed-certificates-kyca8916/mac) 和 [代码签名证书类型](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html)。
+
+#### GitHub Actions 签名 Secrets
+
+进入仓库 **Settings → Secrets and variables → Actions → Secrets → New repository secret**，添加以下两个 **Repository Secrets**，不要放到 Variables：
+
+| Secret 名称 | 内容 |
+| --- | --- |
+| `MACOS_SIGNING_P12_BASE64` | 包含证书和私钥的 `.p12` 文件的 Base64 内容 |
+| `MACOS_SIGNING_P12_PASSWORD` | 导出 `.p12` 时设置的密码 |
+
+在 Mac 本机执行下面的命令，将编码结果直接复制到剪贴板，再粘贴到第一个 Secret 的值中；不要粘贴到聊天、终端输出或项目文档。路径仅为示例，替换成自己的安全存储位置。
+
+```sh
+base64 -i "$HOME/secure/yeravich-signing.p12" | pbcopy
+```
+
+Base64 是编码，不是加密。工作流从 `.p12` 自动识别唯一的代码签名身份，生成临时钥匙串密码，无需额外配置 Variables 或 Apple 账号。私钥仅导入 runner 的临时钥匙串并允许 `codesign` 使用，不修改系统根证书信任；打包后无论成功或失败都会执行清理，Artifacts 只上传 DMG 和校验和。参考 [GitHub 签名 Secrets 说明](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)。
+
+#### 本地构建与签名
+
+在 Mac 上本地打包，需要 Rust、Xcode Command Line Tools、Python 3 和 Homebrew 的 `librsvg`：
+
+```sh
+xcode-select --install  # 已安装时跳过
+brew install librsvg
+export MACOS_SIGNING_IDENTITY="Yeravich Signing"
+bash scripts/build-dmg.sh
+# 替换为上一步生成的单个文件路径；以下是 Apple Silicon 示例。
+bash scripts/smoke-test-dmg.sh dist/Yeravich-1.0.0-macos-arm64.dmg
+```
+
+脚本默认使用当前 Mac 的架构，产物在 `dist/`；也接受 `aarch64-apple-darwin` 或 `x86_64-apple-darwin` 参数（需先安装对应 Rust target）。打包使用 release 构建，将程序、`Info.plist` 和由现有 SVG 生成的 `.icns` 图标组成标准 `.app`，再用系统 `hdiutil` 创建带 Applications 快捷方式的压缩 DMG。`MACOSX_DEPLOYMENT_TARGET` 默认设为 `11.0`，与 bundle 的最低系统版本声明保持一致；这不是对所有 macOS 版本的兼容性保证。
+
+工作流会验证校验和、挂载后的 bundle 与签名、系统动态库依赖，再使用临时配置启动包内程序，确认进程持续运行且已有配置不被修改；不请求翻译服务。
+
+将来切换 Developer ID 时，需要导入对应证书，并补齐 Hardened Runtime、安全时间戳、`notarytool` 公证和票据附加流程；仅替换 Secret 不会自动完成公证。自签名证书与 Developer ID 的代码身份不同，升级时可能需要用户重新授予辅助功能权限。当前 `MACOS_SIGNING_IDENTITY` / `MACOS_SIGNING_KEYCHAIN` 只控制选用哪个签名身份与钥匙串。
+
+### 验证范围
+
+以下范围来自已有实机与打包验证，不代表所有桌面、架构和系统版本均已验证。
+
+- Hyprland 的 Wayland、Xwayland 路径已验证常驻、收起、唤回、焦点和退出；原生 Wayland 已验证选区或剪贴板带入、自动翻译和相同文本复用。强制移除 `WAYLAND_DISPLAY` 的 Xwayland 自动读取仍待验证。
+- Hyprland 已检查双栏布局、多行输入、滚动、选择、复制、Enter 提交和错误显示；中文输入法候选确认仍待验证。macOS 新布局及完整键盘交互尚未完成实机验证。
+- Apple Silicon macOS 已在原生文本框和 TextEdit 中验证授权后的未复制选区读取、剪贴板兜底、自动翻译、相同文本复用、聚焦时保留输入、收起和退出。
+- Linux release AppImage 已通过构建和虚拟 X11 启动检查；Apple Silicon release DMG 已通过构建、固定证书签名、校验和及启动检查。Finder 拖拽安装、互联网下载后的 Gatekeeper 提示与升级后的辅助功能授权仍待验证。
+- Linux 托盘已验证收起、恢复、退出及初始化失败时的关闭保护；macOS 托盘实机交互仍待补充。GitHub 托管打包工作流尚未实际触发。
+- 尚未建立启动、唤出和常驻资源占用的性能基线；其他桌面、架构与系统版本不在上述实机验证范围内。
 
 ## 后续如何积累学习记录
 
