@@ -72,6 +72,8 @@ jobs:
             -P "$MACOS_SIGNING_P12_PASSWORD" -T /usr/bin/codesign > /dev/null
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
             -k "$keychain_password" "$keychain_path" > /dev/null
+          # codesign 查找私钥时仍需在 runner 的钥匙串搜索列表中找到它。
+          security list-keychains -d user -s "$keychain_path"
           rm -f "$certificate_path"
           python3 - "$keychain_path" <<'PY'
           import os

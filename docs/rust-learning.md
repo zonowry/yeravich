@@ -302,7 +302,7 @@ DMG 构建任务通过 `environment: MACOS` 读取该环境的 Secrets，Release
 base64 -i "$HOME/secure/yeravich-signing.p12" | pbcopy
 ```
 
-Base64 是编码，不是加密。工作流从 `.p12` 自动识别唯一的代码签名身份，生成临时钥匙串密码，无需额外配置 Variables 或 Apple 账号。私钥仅导入 runner 的临时钥匙串并允许 `codesign` 使用，不修改系统根证书信任；打包后无论成功或失败都会执行清理，Artifacts 只上传 DMG 和校验和。参考 [GitHub 签名 Secrets 说明](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)。
+Base64 是编码，不是加密。工作流从 `.p12` 自动识别唯一的代码签名身份，生成临时钥匙串密码，无需额外配置 Variables 或 Apple 账号。私钥仅导入 runner 的临时钥匙串并允许 `codesign` 使用；临时钥匙串加入该 runner 的用户搜索列表，供签名时查找私钥，不修改系统根证书信任。打包后无论成功或失败都会执行清理，Artifacts 只上传 DMG 和校验和。参考 [GitHub 签名 Secrets 说明](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)。
 
 #### 本地构建与签名
 
