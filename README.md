@@ -1,38 +1,40 @@
 # Yeravich
 
-一个常驻后台的中英翻译工具。选中文字或复制文本，按 Alt+Q 唤出翻译，用完按 Esc 收起。Mac 上用 Option+Q。
+English | [简体中文](README.zh-CN.md)
 
-默认用 bilibili 的免费 [Index Translate](https://github.com/bilibili/Index-Translate#free-public-api) 服务，不需要 API Key。翻译需要联网，原文会发送到该服务。
+A Chinese–English translation app that stays in the background. Select or copy text, press Alt+Q to translate it, and press Esc to hide the window when you are done. On macOS, use Option+Q.
 
-![Yeravich 界面](https://github.com/user-attachments/assets/7ab96e45-3120-4ebe-a80d-636a22e5abe9)
+Yeravich uses bilibili's free [Index Translate](https://github.com/bilibili/Index-Translate#free-public-api) service by default. No API key is required. Translation requires an internet connection, and your source text is sent to the service.
 
-目前只在 Hyprland 和 macOS（Apple Silicon）上做过实机验证。
+![Yeravich interface](https://github.com/user-attachments/assets/7ab96e45-3120-4ebe-a80d-636a22e5abe9)
 
-## 使用
+Desktop behavior has currently been tested only on Hyprland and macOS (Apple Silicon).
 
-先启动 Yeravich，再从其他应用按快捷键唤出。选区或剪贴板里的文本会自动填入左侧并开始翻译，右侧显示结果。点击“复制”复制译文。
+## Usage
 
-手动输入或粘贴后，按 Enter 翻译，Shift+Enter 换行。顶部的 ⇄ 切换中英翻译方向，右上角的语言菜单切换界面语言。中文系统默认中译英，其他系统默认英译中。
+Start Yeravich, then press the shortcut while using another app. Selected or copied text is inserted into the left panel and translated automatically. The translation appears on the right. Click **Copy** to copy it.
 
-| 操作 | Hyprland | macOS |
+You can also type or paste text manually. Press Enter to translate, or Shift+Enter to insert a line break. The ⇄ button at the top switches the translation direction; the language menu in the upper-right corner changes the interface language. Chinese system locales default to Chinese → English; other locales default to English → Chinese.
+
+| Action | Hyprland | macOS |
 | --- | --- | --- |
-| 唤出并翻译 | Alt+Q（需绑定） | Option+Q |
-| 收起窗口 | Esc | Esc |
-| 退出应用 | Ctrl+Q | Cmd+Q |
-| 翻译输入框中的原文 | Enter | Enter |
-| 换行 | Shift+Enter | Shift+Enter |
+| Show the window and translate | Alt+Q (requires a binding) | Option+Q |
+| Hide the window | Esc | Esc |
+| Quit the app | Ctrl+Q | Cmd+Q |
+| Translate the input | Enter | Enter |
+| Insert a line break | Shift+Enter | Shift+Enter |
 
-除唤出快捷键外，其余按键都在 Yeravich 窗口内使用。
+Except for the shortcut that shows the window, these keys apply while working in Yeravich.
 
-关闭窗口和 Esc 一样，只收起界面，原文和译文都会保留。点击“退出”或按 Ctrl+Q / Cmd+Q 才会结束进程，之后需要重新启动应用。
+Closing the window has the same effect as pressing Esc: the app stays running, and both the source text and translation are preserved. Click **Quit** or press Ctrl+Q / Cmd+Q to stop the app. You will need to start it again before using the global shortcut.
 
-在 Yeravich 中编辑时，再按 Alt+Q / Option+Q 不会覆盖当前内容。托盘菜单的“显示 Yeravich”也只恢复窗口，不会重新读取文本。
+Pressing Alt+Q / Option+Q while editing in Yeravich preserves your current text. The tray menu's **Show Yeravich** action also restores the window without reading new text.
 
 ## Hyprland
 
-使用 Linux x86_64 AppImage。发布后的安装包在 [Releases](https://github.com/zonowry/yeravich/releases)；手动构建的包在 **Actions → AppImage → 运行记录 → Artifacts → Yeravich-linux-x86_64**。
+Use the Linux x86_64 AppImage. Published packages are available under [Releases](https://github.com/zonowry/yeravich/releases). For manual builds, go to **Actions → AppImage → workflow run → Artifacts → Yeravich-linux-x86_64**.
 
-下载 `.AppImage` 和同名 `.sha256`，从 Artifacts 下载的压缩包需要先解压。以下以 0.0.1 为例：
+Download the `.AppImage` and its matching `.sha256` file. Extract the archive first if you downloaded it from Artifacts. For version 0.0.1:
 
 ```sh
 sha256sum --check Yeravich-0.0.1-x86_64.AppImage.sha256
@@ -40,67 +42,67 @@ chmod +x Yeravich-0.0.1-x86_64.AppImage
 ./Yeravich-0.0.1-x86_64.AppImage
 ```
 
-无法挂载 AppImage 时，在启动命令后加 `--appimage-extract-and-run`。
+If your system cannot mount the AppImage, add `--appimage-extract-and-run` to the launch command.
 
-快捷键需要 `xdg-desktop-portal` 和 `xdg-desktop-portal-hyprland`。AppImage 已带有读取剪贴板的工具；自行编译运行时还要安装 `wl-clipboard`。
+Global shortcuts require `xdg-desktop-portal` and `xdg-desktop-portal-hyprland`. The AppImage includes the tool needed to read the clipboard. If you build and run from source, install `wl-clipboard` as well.
 
-在仓库目录执行以下命令，安装桌面入口和图标：
+From the repository directory, install the desktop entry and icon:
 
 ```sh
 install -Dm644 data/com.zonowry.yeravich.desktop "${XDG_DATA_HOME:-$HOME/.local/share}/applications/com.zonowry.yeravich.desktop"
 install -Dm644 data/com.zonowry.yeravich.svg "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/com.zonowry.yeravich.svg"
 ```
 
-把安装后的 `.desktop` 文件中的 `Exec=yeravich` 改为 AppImage 的绝对路径，路径含空格时加双引号。
+In the installed `.desktop` file, replace `Exec=yeravich` with the absolute path to your AppImage. Enclose the path in double quotes if it contains spaces.
 
-在 `~/.config/hypr/hyprland.lua` 中绑定 Alt+Q：
+Add an Alt+Q binding to `~/.config/hypr/hyprland.lua`:
 
 ```lua
 hl.bind("ALT + Q", hl.dsp.global("com.zonowry.yeravich:show"))
 ```
 
-保存后执行 `hyprctl reload config-only`。如果还在用旧的 `hyprland.conf`，写法是：
+Save the file and run `hyprctl reload config-only`. If you still use `hyprland.conf`, use this binding instead:
 
 ```ini
 bind = ALT, Q, global, com.zonowry.yeravich:show
 ```
 
-旧配置用 `hyprctl reload` 重载。Alt+Q 已有其他用途的话，需要先改掉冲突的绑定。
+Reload the older configuration with `hyprctl reload`. Resolve any existing Alt+Q binding conflict first.
 
-这里的 `global` 唤出的是已经运行的 Yeravich，使用前要先启动应用。
+The `global` action shows an already running Yeravich process, so start the app before using it.
 
-选区和剪贴板都能用于翻译，程序优先读取内容有变化的一处，两处都变化时选区优先。带入的文本不对时，直接在原文框里粘贴，再按 Enter。
+Both the text selection and clipboard can supply the input. Yeravich prefers the source whose contents have changed; if both have changed, the selection takes priority. If the imported text is not what you intended, paste the correct text into the input panel and press Enter.
 
 ## macOS
 
-M 系列 Mac 使用文件名含 `macos-arm64` 的 DMG。发布后的安装包在 [Releases](https://github.com/zonowry/yeravich/releases)；手动构建的包在 **Actions → DMG → 运行记录 → Artifacts → Yeravich-macos-arm64**。
+For Apple Silicon Macs, use the DMG with `macos-arm64` in its filename. Published packages are available under [Releases](https://github.com/zonowry/yeravich/releases). For manual builds, go to **Actions → DMG → workflow run → Artifacts → Yeravich-macos-arm64**.
 
-打开 DMG，把 Yeravich.app 拖进 Applications，再从“应用程序”启动。从 Artifacts 下载的压缩包需要先解压。
+Open the DMG, drag Yeravich.app into Applications, then launch it from Applications. Extract the archive first if you downloaded it from Artifacts.
 
-应用目前使用自签名，未经过 Apple 公证。第一次打开可能被系统拦截。确认下载来源后，在“系统设置 → 隐私与安全性”里点击“仍要打开”。[Apple 的相关说明](https://support.apple.com/en-us/102445)
+The app is currently self-signed and has not been notarized by Apple. macOS may block the first launch. After verifying the download's source, open **System Settings → Privacy & Security** and click **Open Anyway**. See [Apple's instructions](https://support.apple.com/en-us/102445).
 
-想直接翻译选中的文字，需要先授权：
+To translate selected text without copying it first, grant Accessibility access:
 
-1. 点击 Yeravich 顶部的“选区权限”。
-2. 在“系统设置 → 隐私与安全性 → 辅助功能”里开启 Yeravich。列表里没有的话，用 `+` 添加“应用程序”中的 Yeravich.app。
-3. 回到其他应用，选中文字，按 Option+Q。
+1. Click **Selection access** at the top of Yeravich.
+2. Enable Yeravich in **System Settings → Privacy & Security → Accessibility**. If it is not listed, click `+` and add Yeravich.app from Applications.
+3. Select text in another app and press Option+Q.
 
-不授权也能用：先 Cmd+C 复制，再按 Option+Q。有些应用不支持读取选区，也用这个方法。
+You can use the app without this permission: copy text with Cmd+C, then press Option+Q. Use the same approach for apps that do not expose their selected text.
 
-更新或移动应用后，如果划选翻译失效，重新添加并授权当前的 Yeravich.app。
+If selection capture stops working after updating or moving the app, remove the old Accessibility entry, add the current Yeravich.app, and grant access again.
 
-## 修改配置
+## Configuration
 
-首次启动会自动创建配置文件，已有文件不会被覆盖：
+The first launch creates a configuration file. Existing files are preserved:
 
-| 平台 | 路径 |
+| Platform | Path |
 | --- | --- |
 | Hyprland | `~/.config/yeravich/config.toml` |
 | macOS | `~/Library/Application Support/yeravich/config.toml` |
 
-设置了 `XDG_CONFIG_HOME` 时，Hyprland 的配置在该目录下的 `yeravich/config.toml`。
+If `XDG_CONFIG_HOME` is set, the Hyprland configuration is stored under `yeravich/config.toml` in that directory.
 
-默认配置如下，也可以查看 [config.example.toml](config.example.toml)：
+The default configuration is shown below and in [config.example.toml](config.example.toml):
 
 ```toml
 [shortcuts]
@@ -109,22 +111,22 @@ show_window = "Alt+Q"
 [translation]
 endpoint = "https://index-translate.bilibili.com/v1/chat/completions"
 model = "Index-Translate-35B-A3B"
-# 换用需要 API Key 的服务时填写：
+# Set this when using a service that requires an API key:
 # api_key = "your-api-key"
 ```
 
-改快捷键就修改 `show_window`，例如 `"Ctrl+Shift+T"`。Mac 的 `Alt` 就是 Option；Hyprland 还要修改前面的桌面绑定。
+To change the shortcut, edit `show_window`, for example to `"Ctrl+Shift+T"`. On macOS, `Alt` means Option. On Hyprland, also update the desktop binding shown above.
 
-换翻译服务时，填写兼容 Chat Completions 的完整接口地址、模型和所需的 API Key。
+To use another translation service, set its full Chat Completions-compatible endpoint URL, model, and API key if required.
 
-修改后退出应用再启动。只关窗口不会重新读取配置。
+Quit and restart the app after changing the configuration. Hiding or closing the window does not reload it.
 
-## 从源码运行
+## Running from source
 
-安装 Rust 和平台所需的系统依赖后，在仓库目录运行：
+Install Rust and the system dependencies for your platform, then run from the repository directory:
 
 ```sh
 cargo run --locked
 ```
 
-开发相关内容见 [Rust 阅读与实践](docs/rust-learning.md)、[构建与验证](docs/rust-learning.md#构建与验证)和[发布流程](docs/rust-learning.md#自动发布-release)。
+Developer documentation is available in Chinese: [Rust reading and practice](docs/rust-learning.md), [building and verification](docs/rust-learning.md#构建与验证), and [the release process](docs/rust-learning.md#自动发布-release).

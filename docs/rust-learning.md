@@ -104,7 +104,7 @@ AX 属性读取会与其他进程通信，因此放在 `tokio::task::spawn_block
 
 `permission(false)` 只检查信任状态；用户点击“选区权限”才调用带 `kAXTrustedCheckOptionPrompt` 的检查并打开系统设置。返回 `false` 不表示用户已经拒绝，也不表示授权弹框已经处理完，重新聚焦或唤出时再次查询。`AccessibilityRequired`、`SelectionUnavailable` 与 `NoText` 分别表达缺少授权、来源不支持/失败和没有选区；即使剪贴板兜底成功，也保留必要的选区失败说明。权限检查不代替输入版本检查，旧读取不能因随后授权而重新生效。
 
-这里的 `Result` 也帮助定位部署问题：`selected_text` 在 `trusted()` 为 `false` 时就返回 `AccessibilityRequired`，此时尚未查询来源应用的焦点元素。即使权限开关已开启，TCC 也可能因旧签名记录拒绝新构建，不能把它当作 `AXSelectedText` 不受支持，更不能把剪贴板兜底成功当作权限已生效。先核对实际运行的 `.app` 和系统授权，再用选区 A、剪贴板 B 不同的测试检查 `Snapshot.primary` 与 `selected=Primary`。重建 ad-hoc 签名应用会改变代码身份，替换已授权的二进制可能让前一次授权失效；处理步骤见 [README](../README.md#macos)。
+这里的 `Result` 也帮助定位部署问题：`selected_text` 在 `trusted()` 为 `false` 时就返回 `AccessibilityRequired`，此时尚未查询来源应用的焦点元素。即使权限开关已开启，TCC 也可能因旧签名记录拒绝新构建，不能把它当作 `AXSelectedText` 不受支持，更不能把剪贴板兜底成功当作权限已生效。先核对实际运行的 `.app` 和系统授权，再用选区 A、剪贴板 B 不同的测试检查 `Snapshot.primary` 与 `selected=Primary`。重建 ad-hoc 签名应用会改变代码身份，替换已授权的二进制可能让前一次授权失效；处理步骤见 [中文 README](../README.zh-CN.md#macos)。
 
 仅在 macOS 引入 `objc2-application-services`，它提供系统 AX 的 Rust 绑定；直接声明已在依赖树中的 `objc2-app-kit`、`objc2-foundation` 和 `objc2-core-foundation`，只开启用到的接口。没有增加外部命令或读取服务，最终仍链接 macOS 自带框架；这些依赖增加构建与 FFI 维护成本，未测量体积、启动或内存变化。参考 [Apple AX 超时说明](https://developer.apple.com/documentation/applicationservices/1459345-axuielementsetmessagingtimeout) 和 [objc2 AX 绑定](https://docs.rs/objc2-application-services/0.3.2/objc2_application_services/)。
 
@@ -124,7 +124,7 @@ AX 属性读取会与其他进程通信，因此放在 `tokio::task::spawn_block
 
 API Key 从 `Option<String>` 经 `as_deref()` 暂时借用为 `Option<&str>`，空白值过滤为 `None`。构建请求头得到 `Option<Result<HeaderValue, _>>`，`transpose()` 把它转换成 `Result<Option<HeaderValue>, _>`，就可以用 `?` 提前返回非法请求头错误。请求头标为敏感值，配置不派生 `Debug`，界面也不显示可能包含密钥的 TOML 原始错误或服务端错误正文。
 
-初版不监听文件变化。服务及其配置由常驻进程持有，修改后需显式退出并重新启动；仅关闭窗口不会重新加载。运行步骤见 [README](../README.md#修改配置)。
+初版不监听文件变化。服务及其配置由常驻进程持有，修改后需显式退出并重新启动；仅关闭窗口不会重新加载。运行步骤见 [中文 README](../README.zh-CN.md#修改配置)。
 
 新增依赖中，`reqwest` 负责 HTTP，关闭默认 feature，仅开启 JSON 与 rustls TLS；`serde`/`toml` 负责数据格式，`dirs` 统一 Windows、macOS 和 Linux 的配置目录，`tokio` 提供网络运行时和后台文件读取。`tempfile` 从测试依赖移到运行依赖，用于跨平台的临时文件清理和不覆盖目标的保存操作，没有新增锁文件中的版本；`serde_json` 仍用于测试和构建脚本。它们增加了依赖、构建和维护成本；当前未测量依赖带来的二进制体积、启动耗时和常驻内存变化。平台验证范围见 README，编译通过不能代替桌面实机验证。相关机制可参考 [Reqwest 客户端](https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html)、[Tokio 文件 I/O](https://docs.rs/tokio/1.48.0/tokio/fs/index.html) 和 [NamedTempFile::persist_noclobber](https://docs.rs/tempfile/latest/tempfile/struct.NamedTempFile.html#method.persist_noclobber)。
 
@@ -224,7 +224,7 @@ Windows/macOS 的图标和菜单不是 `Send`，因此不能移入 `Task::perfor
 
 ## 构建与验证
 
-日常安装、快捷键与权限设置见 [README](../README.md)。以下内容面向修改代码或自行打包的开发者；打包命令均在仓库根目录执行。
+日常安装、快捷键与权限设置见 [中文 README](../README.zh-CN.md)。以下内容面向修改代码或自行打包的开发者；打包命令均在仓库根目录执行。
 
 ### 本地运行与检查
 
