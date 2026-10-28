@@ -287,12 +287,14 @@ bash scripts/smoke-test-appimage.sh
 
 #### GitHub Actions 签名 Secrets
 
-进入仓库 **Settings → Secrets and variables → Actions → Secrets → New repository secret**，添加以下两个 **Repository Secrets**，不要放到 Variables：
+进入仓库 **Settings → Environments**，创建或打开名称为 **MACOS** 的环境，在 **Environment secrets** 中添加以下两项，不要放到 Variables：
 
 | Secret 名称 | 内容 |
 | --- | --- |
 | `MACOS_SIGNING_P12_BASE64` | 包含证书和私钥的 `.p12` 文件的 Base64 内容 |
 | `MACOS_SIGNING_P12_PASSWORD` | 导出 `.p12` 时设置的密码 |
+
+DMG 构建任务通过 `environment: MACOS` 读取该环境的 Secrets，手动构建和标签发布都使用同一配置。若给环境设置了审批或分支/标签限制，发布时也需要满足这些规则。
 
 在 Mac 本机执行下面的命令，将编码结果直接复制到剪贴板，再粘贴到第一个 Secret 的值中；不要粘贴到聊天、终端输出或项目文档。路径仅为示例，替换成自己的安全存储位置。
 

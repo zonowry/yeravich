@@ -3,11 +3,6 @@ name: DMG
 on:
   workflow_dispatch:
   workflow_call:
-    secrets:
-      MACOS_SIGNING_P12_BASE64:
-        required: true
-      MACOS_SIGNING_P12_PASSWORD:
-        required: true
 
 permissions:
   contents: read
@@ -26,6 +21,7 @@ jobs:
             target: x86_64-apple-darwin
             arch: x86_64
     runs-on: ${{ matrix.runner }}
+    environment: MACOS
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
@@ -51,7 +47,7 @@ jobs:
           set -euo pipefail
           umask 077
           if [[ -z "$MACOS_SIGNING_P12_BASE64" || -z "$MACOS_SIGNING_P12_PASSWORD" ]]; then
-            echo 'Configure MACOS_SIGNING_P12_BASE64 and MACOS_SIGNING_P12_PASSWORD in repository Actions Secrets.' >&2
+            echo 'Configure MACOS_SIGNING_P12_BASE64 and MACOS_SIGNING_P12_PASSWORD in the MACOS environment secrets.' >&2
             exit 1
           fi
           certificate_path="$RUNNER_TEMP/yeravich-signing.p12"
