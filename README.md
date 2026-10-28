@@ -30,14 +30,14 @@
 
 ## Hyprland
 
-使用 Linux x86_64 AppImage。在仓库 **Actions → AppImage → 运行记录 → Artifacts → Yeravich-linux-x86_64** 下载构建包。
+使用 Linux x86_64 AppImage。发布后的安装包在 [Releases](https://github.com/zonowry/yeravich/releases)；手动构建的包在 **Actions → AppImage → 运行记录 → Artifacts → Yeravich-linux-x86_64**。
 
-解压下载的压缩包，里面有 `.AppImage` 和同名 `.sha256`。以下以 1.0.0 为例：
+下载 `.AppImage` 和同名 `.sha256`，从 Artifacts 下载的压缩包需要先解压。以下以 0.0.1 为例：
 
 ```sh
-sha256sum --check Yeravich-1.0.0-x86_64.AppImage.sha256
-chmod +x Yeravich-1.0.0-x86_64.AppImage
-./Yeravich-1.0.0-x86_64.AppImage
+sha256sum --check Yeravich-0.0.1-x86_64.AppImage.sha256
+chmod +x Yeravich-0.0.1-x86_64.AppImage
+./Yeravich-0.0.1-x86_64.AppImage
 ```
 
 无法挂载 AppImage 时，在启动命令后加 `--appimage-extract-and-run`。
@@ -73,7 +73,7 @@ bind = ALT, Q, global, com.zonowry.yeravich:show
 
 ## macOS
 
-M 系列 Mac 使用文件名含 `macos-arm64` 的 DMG。在仓库 **Actions → DMG → 运行记录 → Artifacts → Yeravich-macos-arm64** 下载构建包。
+M 系列 Mac 使用文件名含 `macos-arm64` 的 DMG。发布后的安装包在 [Releases](https://github.com/zonowry/yeravich/releases)；手动构建的包在 **Actions → DMG → 运行记录 → Artifacts → Yeravich-macos-arm64**。
 
 打开 DMG，把 Yeravich.app 拖进 Applications，再从“应用程序”启动。从 Artifacts 下载的压缩包需要先解压。
 
@@ -127,4 +127,4 @@ model = "Index-Translate-35B-A3B"
 cargo run --locked
 ```
 
-开发相关内容见 [Rust 阅读与实践](docs/rust-learning.md)和[构建与验证](docs/rust-learning.md#构建与验证)。
+开发相关内容见 [Rust 阅读与实践](docs/rust-learning.md)、[构建与验证](docs/rust-learning.md#构建与验证)和[发布流程](docs/rust-learning.md#自动发布-release)。

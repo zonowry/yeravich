@@ -5128,7 +5128,7 @@ checksum = "e01738255b5a16e78bbb83e7fbba0a1e7dd506905cfc53f4622d89015a03fbb5"
 
 [[package]]
 name = "yeravich"
-version = "1.0.0"
+version = "0.0.1"
 dependencies = [
  "ashpd",
  "dirs",

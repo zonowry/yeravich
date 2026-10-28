@@ -271,7 +271,7 @@ bash scripts/smoke-test-appimage.sh
 
 ### macOS DMG 构建
 
-打包使用固定自签名证书，尚未接入 Apple 公证。[DMG 工作流](../.github/workflows/dmg.yml) 和 [AppImage 工作流](../.github/workflows/appimage.yml) 支持手动运行及 `v*` 标签触发，产物上传到 Actions artifacts。
+打包使用固定自签名证书，尚未接入 Apple 公证。[DMG 工作流](../.github/workflows/dmg.yml) 和 [AppImage 工作流](../.github/workflows/appimage.yml) 支持手动运行，产物上传到 Actions artifacts；推送 `v*` 标签时，由 [Release 工作流](../.github/workflows/release.yml) 统一调用并发布，见下文。
 
 #### 创建固定自签名证书
 
@@ -312,7 +312,7 @@ brew install librsvg
 export MACOS_SIGNING_IDENTITY="Yeravich Signing"
 bash scripts/build-dmg.sh
 # 替换为上一步生成的单个文件路径；以下是 Apple Silicon 示例。
-bash scripts/smoke-test-dmg.sh dist/Yeravich-1.0.0-macos-arm64.dmg
+bash scripts/smoke-test-dmg.sh dist/Yeravich-0.0.1-macos-arm64.dmg
 ```
 
 脚本默认使用当前 Mac 的架构，产物在 `dist/`；也接受 `aarch64-apple-darwin` 或 `x86_64-apple-darwin` 参数（需先安装对应 Rust target）。打包使用 release 构建，将程序、`Info.plist` 和由现有 SVG 生成的 `.icns` 图标组成标准 `.app`，再用系统 `hdiutil` 创建带 Applications 快捷方式的压缩 DMG。`MACOSX_DEPLOYMENT_TARGET` 默认设为 `11.0`，与 bundle 的最低系统版本声明保持一致；这不是对所有 macOS 版本的兼容性保证。
@@ -320,6 +320,33 @@ bash scripts/smoke-test-dmg.sh dist/Yeravich-1.0.0-macos-arm64.dmg
 工作流会验证校验和、挂载后的 bundle 与签名、系统动态库依赖，再使用临时配置启动包内程序，确认进程持续运行且已有配置不被修改；不请求翻译服务。
 
 将来切换 Developer ID 时，需要导入对应证书，并补齐 Hardened Runtime、安全时间戳、`notarytool` 公证和票据附加流程；仅替换 Secret 不会自动完成公证。自签名证书与 Developer ID 的代码身份不同，升级时可能需要用户重新授予辅助功能权限。当前 `MACOS_SIGNING_IDENTITY` / `MACOS_SIGNING_KEYCHAIN` 只控制选用哪个签名身份与钥匙串。
+
+### 自动发布 Release
+
+版本以 `Cargo.toml` 的 `package.version` 为唯一来源。窗口标题在 [app/mod.rs](../src/app/mod.rs) 中通过 `env!("CARGO_PKG_VERSION")` 获取 Cargo 在编译时提供的版本；两个打包脚本通过 `cargo metadata` 获取同一版本，生成文件名与 macOS bundle 信息。`Cargo.lock` 中的项目版本由 Cargo 同步。当前不另设 `VERSION` 文件，以免引入第二处需要同步的版本号。Cargo 的版本字段说明见 [官方文档](https://doc.rust-lang.org/cargo/reference/manifest.html#the-version-field)。
+
+版本号描述这份代码的版本，Git 标签固定对应提交，GitHub Release 则提供该标签的发布说明和安装包。当前由维护者选择发布时机，创建附注标签，再由 CI 自动构建和发布；修改版本号或只在本地打标签都不会触发发布。
+
+[release.yml](../.github/workflows/release.yml) 是标签发布入口。先配置上面的两个 macOS 签名 Secrets；发布使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外的个人访问令牌。只有 `publish` 任务具有 `contents: write`，构建任务保持只读仓库权限。
+
+1. 更新 `Cargo.toml` 的 `package.version`，运行 `cargo check --locked` 检查锁文件是否同步；如提示需要更新，先运行 `cargo check` 更新 `Cargo.lock`，再完成 CI 检查。
+2. 提交并推送版本、锁文件与工作流改动。
+3. 确认待发布改动已提交，再创建并推送与版本完全一致的标签。例如 `package.version = "0.0.1"` 时执行：
+
+   ```sh
+   git tag -a v0.0.1 -m "Yeravich v0.0.1"
+   git push origin v0.0.1
+   ```
+
+在 **Actions → Release** 查看运行。标签不匹配时会在构建前失败；检查、打包和冒烟验证任一失败，都不会进入发布任务。成功后，Release 包含一个 AppImage、两个架构的 DMG 及各自的 `.sha256`，共六个附件，发布说明由 GitHub 自动生成。`v0.0.2-rc.1` 这样的标签会标为预发布，Cargo 版本也必须是 `0.0.2-rc.1`。
+
+`workflow_call` 让两个原有工作流同时支持独立手动打包与被 Release 调用。`needs: [appimage, dmg]` 表达构建完成的依赖，发布任务下载本次运行的 artifacts，检查文件齐全及校验和，再创建草稿、上传附件，最后公开。上传中断会保留草稿；在同一次运行中选择 **Re-run failed jobs** 可以继续上传和发布。重跑时会覆盖草稿中的同名附件，已经公开的 Release 保持不变。普通分支推送仍只触发 CI。
+
+若以后增加自动打标签，可以在发布工作流中读取 Cargo 版本、创建标签，并继续调用打包与发布任务。不能只用默认 `GITHUB_TOKEN` 推送标签后等待另一条 `push.tags` 工作流启动：该令牌产生的推送不会触发新的工作流运行，见 [GitHub 触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)。
+
+这里没有新增 Rust 依赖或所有权逻辑。版本仍来自 `Cargo.toml`；Rust 与发布流程的边界是打包脚本生成的文件，工作流只编排检查、构建和分发。参考 [GitHub 可复用工作流](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) 与 [GitHub CLI 发布命令](https://cli.github.com/manual/gh_release_create)。
+
+本地已通过 actionlint 与 Bash 语法检查，并使用模拟 GitHub CLI 验证版本不匹配、附件缺失或损坏、预发布标记、创建或上传失败、草稿重试及已发布版本保持不变。Rust 格式、Clippy、测试和编译检查也已通过。这些检查没有实际创建 Release；自动发布流程尚待 GitHub 托管环境实际运行验证。
 
 ### 验证范围
 

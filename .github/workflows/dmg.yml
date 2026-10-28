@@ -2,9 +2,12 @@ name: DMG
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
+    secrets:
+      MACOS_SIGNING_P12_BASE64:
+        required: true
+      MACOS_SIGNING_P12_PASSWORD:
+        required: true
 
 permissions:
   contents: read

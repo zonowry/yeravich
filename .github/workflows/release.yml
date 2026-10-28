@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Match tag to Cargo version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import tomllib
+
+          with open("Cargo.toml", "rb") as manifest:
+              version = tomllib.load(manifest)["package"]["version"]
+          tag = os.environ["RELEASE_TAG"]
+          if tag != f"v{version}":
+              raise SystemExit(f"Tag {tag!r} must match Cargo.toml version: v{version}")
+          PY
+
+  appimage:
+    needs: validate
+    uses: ./.github/workflows/appimage.yml
+
+  dmg:
+    needs: validate
+    uses: ./.github/workflows/dmg.yml
+    secrets:
+      MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
+      MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+
+  publish:
+    name: Publish GitHub Release
+    needs: [appimage, dmg]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Yeravich-*
+          merge-multiple: true
+          path: dist
+      - name: Verify assets and publish release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          packages=(
+            "Yeravich-$version-x86_64.AppImage"
+            "Yeravich-$version-macos-arm64.dmg"
+            "Yeravich-$version-macos-x86_64.dmg"
+          )
+          assets=()
+          for package in "${packages[@]}"; do
+            if [[ ! -s "$package" || ! -s "$package.sha256" ]]; then
+              echo "Missing or empty release asset: $package or $package.sha256" >&2
+              exit 1
+            fi
+            sha256sum --check "$package.sha256"
+            assets+=("$package" "$package.sha256")
+          done
+
+          prerelease=false
+          if [[ "${version%%+*}" == *-* ]]; then
+            prerelease=true
+          fi
+
+          # 重试只补全草稿；已经公开的版本保持原有附件。
+          if is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
+            if [[ "$is_draft" != true ]]; then
+              echo "Release $RELEASE_TAG is already published; leaving it unchanged."
+              exit 0
+            fi
+          else
+            gh release create "$RELEASE_TAG" --draft --verify-tag \
+              --title "$RELEASE_TAG" --generate-notes --prerelease="$prerelease"
+          fi
+
+          # 全部附件上传成功后才公开，上传失败时保留草稿供重试。
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --verify-tag --prerelease="$prerelease"
