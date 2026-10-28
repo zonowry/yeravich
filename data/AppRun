@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+# 保留调用者的工作目录，让相对 YERAVICH_CONFIG 路径维持原来的含义。
+app_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+export PATH="$app_dir/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$app_dir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# 使用随库打包的 Compose 数据，避免旧版 xkbcommon 解析较新系统的按键名失败。
+export XLOCALEDIR="${XLOCALEDIR:-$app_dir/usr/share/X11/locale}"
+exec "$app_dir/usr/bin/yeravich" "$@"

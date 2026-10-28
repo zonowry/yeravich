@@ -1,0 +1,14 @@
+# 首次启动会将此默认配置写入系统配置目录的 yeravich/config.toml。
+# 也可手动复制到其他位置，并用 YERAVICH_CONFIG 指定已有配置文件。
+# 修改后需退出应用并重新启动。
+[shortcuts]
+# macOS 的 Alt 对应 Option，也可写成 "Option+Q"。
+# Wayland 仅将此按键作为建议交给桌面，Hyprland 仍需配置 global 绑定。
+show_window = "Alt+Q"
+
+[translation]
+# 完整 Chat Completions URL，程序不会自动拼接 /v1/chat/completions。
+endpoint = "https://index-translate.bilibili.com/v1/chat/completions"
+model = "Index-Translate-35B-A3B"
+# 不需要鉴权时省略或留空；需要时发送 Authorization: Bearer <api_key>。
+# api_key = "your-api-key"

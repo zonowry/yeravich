@@ -1,0 +1,50 @@
+name: AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # 以 Ubuntu 22.04 的 glibc 为构建基线，避免跟随 ubuntu-latest 提高要求。
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+          components: clippy,rustfmt
+          targets: x86_64-unknown-linux-gnu
+      - name: Install build and packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            libx11-6 libx11-xcb1 libxcursor1 libxi6 libxrandr2 \
+            libxinerama1 libxrender1 libxfixes3 libxcb1 \
+            curl file desktop-file-utils squashfs-tools wl-clipboard \
+            xvfb xauth fonts-noto-cjk
+      - name: Check Rust code
+        run: |
+          cargo fmt --check
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo test --workspace --all-features --locked
+          cargo check --workspace --all-targets --all-features --locked
+      - name: Validate desktop entry and build AppImage
+        run: |
+          desktop-file-validate data/com.zonowry.yeravich.desktop
+          bash scripts/build-appimage.sh
+      - name: Smoke test packaged application
+        run: bash scripts/smoke-test-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Yeravich-linux-x86_64
+          path: |
+            dist/*.AppImage
+            dist/*.sha256
+          if-no-files-found: error

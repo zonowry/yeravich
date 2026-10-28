@@ -1,0 +1,118 @@
+name: DMG
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            arch: arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+          components: clippy,rustfmt
+          targets: ${{ matrix.target }}
+      - name: Install icon conversion tool
+        run: brew install librsvg
+      - name: Check Rust code
+        run: |
+          cargo fmt --check
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo test --workspace --all-features --locked
+          cargo check --workspace --all-targets --all-features --locked
+      - name: Import fixed signing identity
+        env:
+          MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
+          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$MACOS_SIGNING_P12_BASE64" || -z "$MACOS_SIGNING_P12_PASSWORD" ]]; then
+            echo 'Configure MACOS_SIGNING_P12_BASE64 and MACOS_SIGNING_P12_PASSWORD in repository Actions Secrets.' >&2
+            exit 1
+          fi
+          certificate_path="$RUNNER_TEMP/yeravich-signing.p12"
+          keychain_path="$RUNNER_TEMP/yeravich-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 32)
+          python3 - "$certificate_path" <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          import sys
+
+          try:
+              data = base64.b64decode("".join(os.environ["MACOS_SIGNING_P12_BASE64"].split()), validate=True)
+          except ValueError:
+              raise SystemExit("MACOS_SIGNING_P12_BASE64 is not valid Base64.")
+          Path(sys.argv[1]).write_bytes(data)
+          PY
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" \
+            -P "$MACOS_SIGNING_P12_PASSWORD" -T /usr/bin/codesign > /dev/null
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$keychain_password" "$keychain_path" > /dev/null
+          rm -f "$certificate_path"
+          python3 - "$keychain_path" <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          # 自签名证书不会通过系统信任检查；不使用只列受信任身份的 -v。
+          listing = subprocess.check_output(
+              ["security", "find-identity", "-p", "codesigning", sys.argv[1]], text=True
+          )
+          matches = re.findall(r'^\s*\d+\)\s+([0-9A-Fa-f]{40})\s+"[^"\n]*"([^\n]*)', listing, re.M)
+          identities = {digest.upper() for digest, reason in matches
+                        if not reason.strip() or reason.strip() == "(CSSMERR_TP_NOT_TRUSTED)"}
+          if len(identities) != 1:
+              raise SystemExit("Export exactly one usable code-signing certificate with its private key to the P12.")
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"MACOS_SIGNING_IDENTITY={identities.pop()}\n")
+              output.write(f"MACOS_SIGNING_KEYCHAIN={sys.argv[1]}\n")
+          PY
+      - name: Build application bundle and DMG
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+        run: bash scripts/build-dmg.sh "$RUST_TARGET"
+      - name: Verify and smoke test packaged application
+        run: bash scripts/smoke-test-dmg.sh dist/*.dmg
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          keychain_path="$RUNNER_TEMP/yeravich-signing.keychain-db"
+          signing_cleanup_status=0
+          if [[ -f "$keychain_path" ]]; then
+            security delete-keychain "$keychain_path" || signing_cleanup_status=$?
+          fi
+          rm -f "$RUNNER_TEMP/yeravich-signing.p12"
+          exit "$signing_cleanup_status"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Yeravich-macos-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.dmg.sha256
+          if-no-files-found: error

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Yeravich
+Comment=Quickly translate text
+Comment[zh_CN]=快速翻译文本
+Exec=yeravich
+Icon=com.zonowry.yeravich
+Terminal=false
+Categories=Utility;
+StartupWMClass=com.zonowry.yeravich

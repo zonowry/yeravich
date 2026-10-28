@@ -1,0 +1,18 @@
+/target/
+/dist/
+*.log
+.env
+.env.*
+!.env.example
+/config.toml
+/private-docs/
+*.p12
+*.pfx
+*.keychain
+*.keychain-db
+
+
+
+# Added by cargo
+
+/target
