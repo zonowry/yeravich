@@ -38,5 +38,6 @@
   "selection_permission_hint": "Allow reading selected text in other apps without copying. You can revoke access in System Settings.",
   "capture_accessibility_required": "Reading selections needs Accessibility access. Click “Selection access” and enable Yeravich in System Settings. You can copy text before summoning as a fallback.",
   "capture_accessibility_settings": "Could not open permission settings. Open System Settings → Privacy & Security → Accessibility and enable Yeravich.",
-  "capture_selection_unavailable": "The source app did not provide readable selected text, or the read failed or timed out. Tried the clipboard instead; copy the text and summon again."
+  "capture_selection_unavailable": "The source app did not provide readable selected text, or the read failed or timed out. Tried the clipboard instead; copy the text and summon again.",
+  "capture_clipboard_fallback": "No current selection was read. Using clipboard text. If it is not what you intended, copy the text you need and summon again."
 }

@@ -26,10 +26,14 @@ impl App {
                 #[cfg(target_os = "macos")]
                 source_pid: text_capture::macos::frontmost_application(),
             });
+            // macOS 的来源应用可能在失焦时清空选区。后台读完再显示/聚焦，
+            // 只固定 PID 并不能保留来源控件的选区；读取仍不阻塞事件线程。
+            #[cfg(target_os = "macos")]
+            return self.read_pending_capture();
         } else {
             eprintln!("[capture] skipped: application already focused");
         }
-        // 显示窗口不等待外部文本读取；编辑等操作可随时使读取结果失效。
+        // 其他平台可并行显示与读取；编辑等操作可随时使读取结果失效。
         Task::batch([self.show_window(), self.read_pending_capture()])
     }
 
@@ -102,6 +106,9 @@ impl App {
                 Err(text_capture::Error::SelectionUnavailable) => {
                     Some(text_capture::Error::SelectionUnavailable)
                 }
+                Err(text_capture::Error::NoText) if snapshot.clipboard.is_ok() => {
+                    Some(text_capture::Error::ClipboardFallback)
+                }
                 _ => None,
             };
         }
@@ -117,6 +124,9 @@ impl App {
             }
         };
         self.capture_snapshot = Some(snapshot);
+        // 只让仍有效的读取触发唤出。取消或旧结果不能再次把窗口抢到前台。
+        #[cfg(target_os = "macos")]
+        let task = Task::batch([self.show_window(), task]);
         task
     }
 }
@@ -125,6 +135,67 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::translation_panel;
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn mac_waits_for_the_current_capture_before_restoring_the_window() {
+        let id = iced::window::Id::unique();
+        let mut app = App {
+            window: WindowState::Hidden(id),
+            ..App::default()
+        };
+        let _ = app.show_with_text();
+        let first = app.capture.as_ref().unwrap().revision;
+        assert_eq!(app.window, WindowState::Hidden(id));
+        assert!(app.capture.as_ref().unwrap().handle.is_some());
+        let _ = app.show_with_text();
+        let current = app.capture.as_ref().unwrap().revision;
+        let snapshot = || text_capture::Snapshot {
+            primary: Ok("selected".into()),
+            clipboard: Ok("clipboard".into()),
+        };
+        assert_eq!(app.text_captured(first, snapshot()).units(), 0);
+        assert_eq!(app.window, WindowState::Hidden(id));
+        assert!(app.capture_snapshot.is_none());
+        let _ = app.text_captured(current, snapshot());
+        assert_eq!(app.window, WindowState::Visible(id));
+        assert!(app.capture.is_none());
+        assert_eq!(app.capture_source, Some(text_capture::Source::Primary));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn mac_failures_still_restore_the_window_but_cancelled_reads_do_not() {
+        use text_capture::Error;
+        for error in [
+            Error::NoText,
+            Error::AccessibilityRequired,
+            Error::SelectionUnavailable,
+        ] {
+            let id = iced::window::Id::unique();
+            let mut app = App {
+                window: WindowState::Hidden(id),
+                ..App::default()
+            };
+            let _ = app.show_with_text();
+            let revision = app.capture.as_ref().unwrap().revision;
+            let snapshot = || text_capture::Snapshot {
+                primary: Err(error),
+                clipboard: Err(Error::NoText),
+            };
+            let _ = app.text_captured(revision, snapshot());
+            assert_eq!(app.window, WindowState::Visible(id));
+            assert_eq!(app.capture_notice, Some(error));
+
+            app.window = WindowState::Hidden(id);
+            let _ = app.show_with_text();
+            let revision = app.capture.as_ref().unwrap().revision;
+            app.cancel_capture("test cancellation");
+            assert_eq!(app.text_captured(revision, snapshot()).units(), 0);
+            assert_eq!(app.window, WindowState::Hidden(id));
+            assert!(app.capture_notice.is_none());
+        }
+    }
 
     #[test]
     fn focus_starts_a_waiting_capture_once_and_editing_cancels_it() {

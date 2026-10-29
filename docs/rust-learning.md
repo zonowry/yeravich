@@ -70,7 +70,7 @@
 
 ## 快捷键带入文本与取消任务
 
-阅读路径是 `App::update(Event::Activated)` → [show_with_text](../src/app/capture.rs) → [text_capture::read](../src/text_capture.rs) → `Message::TextCaptured` → `TranslationPanel::import_and_translate` → `Message::Translate`。只有从应用外唤出才开始读取；窗口已聚焦时保留当前编辑内容。`Task::batch` 同时驱动窗口显示与读取，外部文本不会阻塞 Wayland 窗口重建。
+阅读路径是 `App::update(Event::Activated)` → [show_with_text](../src/app/capture.rs) → [text_capture::read](../src/text_capture.rs) → `Message::TextCaptured` → `TranslationPanel::import_and_translate` → `Message::Translate`。只有从应用外唤出才开始读取；窗口已聚焦时保留当前编辑内容。Linux / Windows 用 `Task::batch` 同时驱动窗口显示与读取，外部文本不会阻塞 Wayland 窗口重建；macOS 先在后台读取选区，再由有效的 `TextCaptured` 消息唤出窗口，避免来源应用失焦时丢失选区。
 
 Linux 读取 PRIMARY selection 和普通剪贴板，Windows 读取普通剪贴板，macOS 从来源应用读取 AX 选区并以普通剪贴板兜底。`usable_text` 接收 `Option<String>` 的所有权，借用 `trim()` 判断是否全为空白，但返回原来的 `String`，保留用户的换行和缩进。`Snapshot` 分别持有两个 `Result<String, Error>`，这样一个来源失败时另一个仍可使用。任务把快照所有权交给消息；`text_captured` 通过 `snapshot.text(source)` 临时借用 `&str` 传给面板，再把整个快照移入 `App` 作为下次比较的依据，无需克隆正文。Iced 的原生剪贴板任务使用 `Option::take()` 把第一次读取移入最终快照，适应任务回调的 `FnMut` 签名。
 
@@ -94,21 +94,29 @@ Wayland 最后一个窗口关闭后，Iced 的剪贴板连接也会断开。[way
 
 ## macOS 选区、权限与 FFI 所有权
 
-入口在 [`macos.rs`](../src/text_capture/macos.rs)。`App::show_with_text` 在 `show_window` 前通过 `NSWorkspace` 取得来源 PID，保存在 `Capture::source_pid: Option<i32>`。只把整数移入后台任务，不把 AppKit 对象或借用的指针跨线程传递。后台通过 `AXUIElement::new_application(pid)` 访问固定的来源，再取 `AXFocusedUIElement` 的 `AXSelectedText`；不会在 Yeravich 获得焦点后查询系统当前的焦点控件，也不会退而读取整个控件的 `AXValue`。
+入口在 [`macos.rs`](../src/text_capture/macos.rs)。`App::show_with_text` 通过 `NSWorkspace` 取得来源 PID，保存在 `Capture::source_pid: Option<i32>`，先返回读取任务。`text_captured` 检查版本有效后才调用 `show_window`；读取失败也会唤出窗口，取消或过期结果则不能抢焦点。只固定 PID、随后并行显示窗口仍有竞态：来源应用可能在失焦时清空自己的选区。这里不阻塞事件线程，而是调整两个异步操作的顺序。
 
-AX 属性读取会与其他进程通信，因此放在 `tokio::task::spawn_blocking`，并给应用对象和焦点元素分别设置 250 毫秒消息超时。丢弃 Iced 的任务句柄不能强行终止已开始的阻塞 AX 调用；超时限制等待，捕获版本检查拒绝迟到结果。这是“取消等待”和“取消底层工作”必须区分的另一个例子。
+后台通过 `AXUIElement::new_application(pid)` 访问固定的来源，再取 `AXFocusedUIElement` 的 `AXSelectedText`。没有值或属性不受支持时，先用 SDK 的 `AXSelectedTextRange` 取得 `AXValue` 包装的 `CFRange`，再交给同一元素的 `AXStringForRange`。`selected_character_range` 检查外层 CF 类型、内部范围类型、负数、溢出和空光标；索引原样交回系统，不用于切片 Rust 的 UTF-8 `String`，避免中文或 emoji 偏移错误。这里的 `AXValue` 是 SDK 包装范围的类型，不是读取控件全文的同名属性。参考 [Apple 选区范围接口](https://developer.apple.com/documentation/applicationservices/kaxselectedtextrangeattribute)。
+
+Zen 网页正文可能不提供上述两个标准属性，因此保留已经验证的 `AXSelectedTextMarkerRange` → `AXStringForTextMarkerRange` 分支，见 [Mozilla 的选区标记实现](https://github.com/mozilla/gecko-dev/blob/master/accessible/mac/MOXTextMarkerDelegate.mm)。只查询同一个焦点元素，不遍历其他控件、不读取全文，也不模拟 Cmd+C 或修改剪贴板。本次只开启已有 `objc2-application-services` 的 `AXValue` feature，没有增加 crate；性能和体积变化未经测量。
+
+`with_fallback` 接收 `impl FnOnce() -> Result<T, AXError>`：成功、权限不足、通信失败或数据类型错误时不调用下一步，仅在属性为空或不受支持时尝试。内部保留原始 `AXError`，最后才由 `capture_error` 映射为用户提示，避免过早合并错误而重复查询无响应的应用。闭包借用后台任务内的焦点元素；`CFRetained<CFType>` 持有范围对象，`selected_character_range` 返回的 `&AXValue` 仅在持有者有效时使用。所有 AX 对象都在同一个阻塞任务中创建、使用和释放，跨线程只传 PID 和拥有数据的 `String` / `Result`。
+
+AX 属性读取会与其他进程通信，因此放在 `tokio::task::spawn_blocking`。所有请求共享 `Instant` 截止时间，预算为 750 毫秒，每次消息超时取剩余时间与 250 毫秒中的较小值；用完预算就停止，避免新增接口逐项累加完整等待时间。唤出会等待这次读取结束，但不等待翻译网络请求；该预算不是端到端唤出耗时的实测保证。丢弃 Iced 的任务句柄不能强行终止已开始的阻塞 AX 调用；超时限制等待，捕获版本检查拒绝迟到结果。
 
 `attribute` 把 `&mut value` 转成有效的 `NonNull` 输出槽交给 C API；只有返回成功且指针非空，才用 `CFRetained::from_raw` 接管 Copy API 交出的 +1 引用。包装值离开作用域会释放引用。`downcast_ref` 检查 Core Foundation 类型 ID 后才把返回值借用为 `AXUIElement` 或 `CFString`，避免把其他类型当作字符串。少量 `unsafe` 局限在这些 FFI 边界，并在注释里说明指针有效性和所有权依据。
 
 `macos::read` 将拥有的 `Result<String, Error>` 移入剪贴板读取回调。回调要求 `FnMut`，所以用 `mem::replace` 将结果移出并留下 `NoText`，无需克隆选区正文。最终 `Snapshot.primary` 在 Mac 表示本次真实 AX 选区，因此只要有效就优先使用；Linux 的 PRIMARY 可能残留旧内容，继续采用变更优先规则。
 
-`permission(false)` 只检查信任状态；用户点击“选区权限”才调用带 `kAXTrustedCheckOptionPrompt` 的检查并打开系统设置。返回 `false` 不表示用户已经拒绝，也不表示授权弹框已经处理完，重新聚焦或唤出时再次查询。`AccessibilityRequired`、`SelectionUnavailable` 与 `NoText` 分别表达缺少授权、来源不支持/失败和没有选区；即使剪贴板兜底成功，也保留必要的选区失败说明。权限检查不代替输入版本检查，旧读取不能因随后授权而重新生效。
+`permission(false)` 只检查信任状态；用户点击“选区权限”才调用带 `kAXTrustedCheckOptionPrompt` 的检查并打开系统设置。返回 `false` 不表示用户已经拒绝，也不表示授权弹框已经处理完，重新聚焦或唤出时再次查询。`AccessibilityRequired`、`SelectionUnavailable` 与 `NoText` 分别表达缺少授权、来源不支持/失败和没有选区；即使剪贴板兜底成功，也保留必要的选区失败说明。`NoText` 且剪贴板可用时显示 `ClipboardFallback` 提示，避免空选区静默回退；随后权限检查成功不能清除这条提示。权限检查不代替输入版本检查，旧读取不能因随后授权而重新生效。
 
 这里的 `Result` 也帮助定位部署问题：`selected_text` 在 `trusted()` 为 `false` 时就返回 `AccessibilityRequired`，此时尚未查询来源应用的焦点元素。即使权限开关已开启，TCC 也可能因旧签名记录拒绝新构建，不能把它当作 `AXSelectedText` 不受支持，更不能把剪贴板兜底成功当作权限已生效。先核对实际运行的 `.app` 和系统授权，再用选区 A、剪贴板 B 不同的测试检查 `Snapshot.primary` 与 `selected=Primary`。重建 ad-hoc 签名应用会改变代码身份，替换已授权的二进制可能让前一次授权失效；处理步骤见 [中文 README](../README.zh-CN.md#macos)。
 
 仅在 macOS 引入 `objc2-application-services`，它提供系统 AX 的 Rust 绑定；直接声明已在依赖树中的 `objc2-app-kit`、`objc2-foundation` 和 `objc2-core-foundation`，只开启用到的接口。没有增加外部命令或读取服务，最终仍链接 macOS 自带框架；这些依赖增加构建与 FFI 维护成本，未测量体积、启动或内存变化。参考 [Apple AX 超时说明](https://developer.apple.com/documentation/applicationservices/1459345-axuielementsetmessagingtimeout) 和 [objc2 AX 绑定](https://docs.rs/objc2-application-services/0.3.2/objc2_application_services/)。
 
-测试覆盖 Unicode/空白保留、错误的 CF 类型、权限/空选区/通信失败分类、Mac 选区优先、剪贴板兜底提示和过期结果。实机需将选区 A 与剪贴板 B 区分，并分别用 SSH 和普通 `.app` 启动验证，避免继承的开发环境信任掩盖用户需要的授权步骤。
+测试覆盖 Unicode/空白保留、CF/AXValue 类型检查、非法或空范围、共享超时预算、原生选区优先、兼容分支、权限/空选区/通信失败分类、剪贴板兜底提示，以及读取完成前不唤出、失败仍唤出、取消/过期结果不能唤出。实机需将选区 A 与剪贴板 B 区分，并分别用开发环境和普通 `.app` 启动验证，避免继承的开发环境信任掩盖用户需要的授权步骤。
+
+`selected_text_from_running_application` 是默认忽略的只读实机测试，不发送翻译请求。先在来源应用选中已知测试文本，再设置 `YERAVICH_TEST_SOURCE_PID` 和 `YERAVICH_TEST_SELECTED_TEXT`，运行 `cargo test selected_text_from_running_application -- --ignored --nocapture`。将测试名换为 `selected_range_from_running_application` 可以单独验证标准范围接口，即使该控件本来就支持直接读取。测试进程需要辅助功能权限；断言失败只报告错误或字节长度，不输出实际选区正文。这些测试验证 AX 读取链路，不能替代 Option+Q、焦点切换及已安装应用身份的验证。
 
 ## 配置从文件进入服务
 
@@ -359,6 +367,7 @@ bash scripts/smoke-test-dmg.sh dist/Yeravich-0.0.1-macos-arm64.dmg
 - Hyprland 的 Wayland、Xwayland 路径已验证常驻、收起、唤回、焦点和退出；原生 Wayland 已验证选区或剪贴板带入、自动翻译和相同文本复用。强制移除 `WAYLAND_DISPLAY` 的 Xwayland 自动读取仍待验证。
 - Hyprland 已检查双栏布局、多行输入、滚动、选择、复制、Enter 提交和错误显示；中文输入法候选确认仍待验证。macOS 新布局及完整键盘交互尚未完成实机验证。
 - Apple Silicon macOS 已在原生文本框和 TextEdit 中验证授权后的未复制选区读取、剪贴板兜底、自动翻译、相同文本复用、聚焦时保留输入、收起和退出。
+- 选区读取已用 Rust 1.98.1 通过格式、Clippy、88 项自动测试和编译检查；两个只读 AX 实机测试与一个远端翻译测试默认忽略。AX 实机测试复现了 Zen 网页正文的 `AXSelectedText` / `AXSelectedTextRange` 返回 `NoValue`，标记分支仍能读取；单独调用标准 `AXSelectedTextRange` → `AXStringForRange` 也已在 Zen 输入框中读对中文与 emoji。release 使用与原安装版相同的证书完成签名、校验与替换；Option+Q 和窗口焦点交互仍待用户验收。
 - Linux release AppImage 已通过构建和虚拟 X11 启动检查；Apple Silicon release DMG 已通过构建、固定证书签名、校验和及启动检查。Finder 拖拽安装、互联网下载后的 Gatekeeper 提示与升级后的辅助功能授权仍待验证。
 - Linux 托盘已验证收起、恢复、退出及初始化失败时的关闭保护；macOS 托盘实机交互仍待补充。
 - 尚未建立启动、唤出和常驻资源占用的性能基线；其他桌面、架构与系统版本不在上述实机验证范围内。

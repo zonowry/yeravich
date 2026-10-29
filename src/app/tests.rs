@@ -13,6 +13,20 @@ fn ready_app(wayland: bool) -> (App, iced_window::Id) {
     )
 }
 
+fn activate_and_complete_capture(app: &mut App) {
+    let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+    #[cfg(target_os = "macos")]
+    if let Some(capture) = &app.capture {
+        let _ = app.update(Message::TextCaptured {
+            revision: capture.revision,
+            snapshot: text_capture::Snapshot {
+                primary: Err(text_capture::Error::NoText),
+                clipboard: Err(text_capture::Error::NoText),
+            },
+        });
+    }
+}
+
 #[test]
 fn configuration_before_window_readiness_waits_to_register() {
     let id = iced_window::Id::unique();
@@ -187,7 +201,7 @@ fn closing_and_reopening_reuses_a_supported_window() {
     let _ = app.update(Message::CloseRequested(id));
     assert_eq!(app.window, WindowState::Hidden(id));
 
-    let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+    activate_and_complete_capture(&mut app);
     assert_eq!(app.window, WindowState::Visible(id));
 }
 
@@ -198,7 +212,7 @@ fn wayland_reopens_only_after_the_previous_window_has_closed() {
     assert_eq!(app.window, WindowState::Closing { id, reopen: false });
 
     for _ in 0..3 {
-        let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+        activate_and_complete_capture(&mut app);
         assert_eq!(app.window, WindowState::Closing { id, reopen: true });
     }
     let _ = app.update(Message::WindowClosed(id));
@@ -208,7 +222,7 @@ fn wayland_reopens_only_after_the_previous_window_has_closed() {
     assert_ne!(new_id, id);
 
     // 创建尚未完成时的热键，以及旧窗口迟到的事件，都不能创建第二个窗口。
-    let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+    activate_and_complete_capture(&mut app);
     let _ = app.update(Message::WindowClosed(id));
     assert_eq!(app.window, WindowState::Opening(new_id));
 }
@@ -251,7 +265,7 @@ fn wayland_reuses_a_focused_window_and_remaps_an_unfocused_one() {
     assert_eq!(app.window, WindowState::Visible(id));
 
     let _ = app.update(Message::WindowFocused(id, false));
-    let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+    activate_and_complete_capture(&mut app);
     assert_eq!(app.window, WindowState::Closing { id, reopen: true });
 }
 
@@ -287,7 +301,7 @@ fn wayland_keeps_window_size_and_waits_for_a_shortcut_after_closing() {
     assert_eq!(app.window, WindowState::Absent);
     assert_eq!(app.window_size, size);
 
-    let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+    activate_and_complete_capture(&mut app);
     assert!(matches!(app.window, WindowState::Opening(_)));
     assert_eq!(app.window_size, size);
 }
@@ -305,7 +319,7 @@ fn an_empty_description_update_does_not_reopen_or_block_the_window() {
         assert_eq!(app.window, hidden);
         assert!(matches!(app.shortcut_status, ShortcutStatus::Ready(_)));
 
-        let _ = app.update(Message::Shortcut(shortcut::Event::Activated));
+        activate_and_complete_capture(&mut app);
         let visible_id = app.window.id().expect("activation restores a window");
         if wayland {
             app.registration = Some(shortcut::Registration::default());

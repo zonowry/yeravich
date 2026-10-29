@@ -13,6 +13,8 @@ pub enum Error {
     AccessibilitySettings,
     #[cfg(target_os = "macos")]
     SelectionUnavailable,
+    #[cfg(target_os = "macos")]
+    ClipboardFallback,
     // 这两类错误目前只由 Linux 的外部读取工具产生。
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     MissingTool,
@@ -30,6 +32,8 @@ impl Error {
             Self::AccessibilitySettings => Langs::CAPTURE_ACCESSIBILITY_SETTINGS,
             #[cfg(target_os = "macos")]
             Self::SelectionUnavailable => Langs::CAPTURE_SELECTION_UNAVAILABLE,
+            #[cfg(target_os = "macos")]
+            Self::ClipboardFallback => Langs::CAPTURE_CLIPBOARD_FALLBACK,
             Self::MissingTool => Langs::CAPTURE_MISSING_TOOL,
             Self::Unavailable => Langs::CAPTURE_UNAVAILABLE,
         };

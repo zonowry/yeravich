@@ -87,6 +87,8 @@ To translate selected text without copying it first, grant Accessibility access:
 2. Enable Yeravich in **System Settings → Privacy & Security → Accessibility**. If it is not listed, click `+` and add Yeravich.app from Applications.
 3. Select text in another app and press Option+Q.
 
+Yeravich reads the selection before bringing its window to the front. It first requests selected text, then tries the standard macOS selection-range interface, and retains text-marker support for Zen / Firefox web pages. If no selection can be read and clipboard text is used, a notice explains the fallback.
+
 You can use the app without this permission: copy text with Cmd+C, then press Option+Q. Use the same approach for apps that do not expose their selected text.
 
 If selection capture stops working after updating or moving the app, remove the old Accessibility entry, add the current Yeravich.app, and grant access again.

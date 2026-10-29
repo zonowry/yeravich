@@ -38,5 +38,6 @@
   "selection_permission_hint": "授权读取其他应用中选中的文本。无需复制；随时可在系统设置中撤销。",
   "capture_accessibility_required": "读取选区需要辅助功能权限。点击“选区权限”，在系统设置中启用 Yeravich；当前可先复制文本再唤出。",
   "capture_accessibility_settings": "无法打开授权设置。请手动前往“系统设置 → 隐私与安全性 → 辅助功能”启用 Yeravich。",
-  "capture_selection_unavailable": "来源应用未提供可读取的选区，或读取失败、超时；已尝试剪贴板。可先复制文字，再次唤出。"
+  "capture_selection_unavailable": "来源应用未提供可读取的选区，或读取失败、超时；已尝试剪贴板。可先复制文字，再次唤出。",
+  "capture_clipboard_fallback": "未读到当前选区，已使用剪贴板文本。若内容不符，请先复制所需文字，再次唤出。"
 }

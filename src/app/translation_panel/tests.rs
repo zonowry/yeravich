@@ -453,6 +453,39 @@ fn mac_permission_failure_falls_back_without_hiding_the_permission_notice() {
 
 #[test]
 #[cfg(target_os = "macos")]
+fn mac_empty_selection_explains_clipboard_fallback_even_when_permission_is_granted() {
+    use crate::text_capture::{Error, Snapshot};
+    let mut app = App {
+        panel: ready_panel(),
+        ..App::default()
+    };
+    let revision = start_capture(&mut app);
+    let _ = app.update(AppMessage::TextCaptured {
+        revision,
+        snapshot: Snapshot {
+            primary: Err(Error::NoText),
+            clipboard: Ok("clipboard fallback".into()),
+        },
+    });
+    assert_eq!(app.panel.input.text(), "clipboard fallback");
+    assert_eq!(app.capture_notice, Some(Error::ClipboardFallback));
+    let _ = app.update(AppMessage::SelectionPermissionChecked(Ok(true)));
+    assert_eq!(app.capture_notice, Some(Error::ClipboardFallback));
+
+    let revision = start_capture(&mut app);
+    let _ = app.update(AppMessage::TextCaptured {
+        revision,
+        snapshot: Snapshot {
+            primary: Ok("web selection".into()),
+            clipboard: Ok("clipboard fallback".into()),
+        },
+    });
+    assert_eq!(app.panel.input.text(), "web selection");
+    assert!(app.capture_notice.is_none());
+}
+
+#[test]
+#[cfg(target_os = "macos")]
 fn mac_late_permission_failure_cannot_replace_edited_text_or_add_a_notice() {
     use crate::text_capture::{Error, Snapshot};
     let mut app = App {
