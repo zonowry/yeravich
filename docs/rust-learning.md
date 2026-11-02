@@ -34,7 +34,7 @@
 
 ## 用消息表达行为
 
-面板的 `Message` 枚举包含 `Clear`、`SwapLanguages`、`Translate` 等行为，也包含带数据的 `Translated { revision, result }`。一个消息的类型就说明它代表什么，以及处理它需要哪些数据。
+面板的 `Message` 枚举包含 `Clear`、`SwapLanguages`、`Translate` 等行为，也包含带数据的 `TranslationDelta { revision, delta }` 和 `Translated { revision, result }`，分别表示正文片段和请求结束。一个消息的类型就说明它代表什么，以及处理它需要哪些数据。
 
 `update` 使用 `match` 处理各个变体。新增消息时，穷尽匹配会帮助检查处理分支是否齐全。多数分支只改变状态并返回 `Task::none()`；复制或翻译等分支则返回需要执行的任务。
 
@@ -60,13 +60,27 @@
 
 ## 让异步任务持有输入
 
-发起翻译时，代码把 `self.input.text()` 得到的 `String` 移入 `async move`，再传给 `Service::translate`。`String` 拥有文本数据；这份文本进入异步任务后，编辑器仍然可以继续处理用户输入，任务使用的是发起时取得的文本。
+发起翻译时，代码把 `self.input.text()` 得到的 `String` 交给 `Service::translate`，后者通过 `async move` 让流式任务持有它。`String` 拥有文本数据；这份文本进入异步任务后，编辑器仍然可以继续处理用户输入，任务使用的是发起时取得的文本。
 
 任务还持有一个 `Service` 副本：其中配置是只读快照，`reqwest::Client` 的克隆共享原有连接池。任务需要在 `update` 返回后继续运行，不能借用面板里的服务；这里的克隆用于同时保留面板状态和任务所需的数据，没有引入共享可变配置。请求体 `ChatRequest<'a>` 则只在函数内部借用模型名和提示词，序列化后无需复制完整字符串到另一个结构体。
 
-任务通过 `Task::perform` 返回结果，由 `move |result| Message::Translated { revision, result }` 转成消息。`move` 让闭包按值捕获需要的变量；这里的 `revision` 是实现了 `Copy` 的 `u64`，因此捕获的是版本号副本。
+任务通过 `Task::run` 接收 `Service::translate` 返回的 `impl Stream<Item = Event>`。一次 `Future` 产生一个结果，`Stream` 则可以依次产生多个事件：`Delta(String)` 拥有一个正文片段，`Finished(Result<(), Error>)` 表示请求结束。映射闭包把两种事件变成带 `revision` 的面板消息；`move` 按值捕获版本号，`u64` 实现了 `Copy`，所以这里保存的是副本。
 
-`async fn` 调用产生 future，具体执行由任务机制驱动。Iced 开启 `tokio` feature，使 `Task::perform` 中的 `reqwest` 网络请求拥有需要的 Tokio 执行环境。`async` 本身不会让阻塞操作自动变成非阻塞操作；这里文件读取使用 `tokio::fs::read_to_string`，由后台线程执行文件 I/O，HTTP 请求通过异步客户端等待网络事件。
+`async fn` 调用产生 future，具体执行由任务机制驱动。Iced 开启 `tokio` feature，使 `Task::run` 驱动的 `reqwest` 网络请求拥有需要的 Tokio 执行环境。`async` 本身不会让阻塞操作自动变成非阻塞操作；这里文件读取使用 `tokio::fs::read_to_string`，由后台线程执行文件 I/O，HTTP 请求通过异步客户端等待网络事件。
+
+## 流式译文怎样进入界面
+
+阅读入口是 [Service::translate / request](../src/translation.rs)、[SSE Decoder](../src/translation/sse.rs) 和 [TranslationPanel::update](../src/app/translation_panel/update.rs)。`translate(self, ...)` 消费任务使用的服务快照，返回的流因此不借用面板。内部的 `request(&self, ..., output: &mut Sender<Event>)` 在同一个任务中借用服务和发送端，不需要共享可变状态或额外的网络线程。
+
+`iced::stream::channel(16, async move |mut output| ...)` 把异步请求接到有界通道。每个片段通过 `send(...).await` 交出所有权；通道满时等待界面消费，空闲时等待网络事件，不轮询。正文和结束事件使用同一个发送端，保证已收到的片段先于成功或错误到达面板，避免结束消息让队列中的最后几段被当成迟到结果。`serde_json` 从开发依赖移到运行依赖，用来解析各帧 JSON；版本已在锁文件中，Windows、macOS、Linux 共享此实现。复用现有 Reqwest 的 `Response::chunk` 和 Iced 的通道，没有引入专用 SSE crate，也未测量启动、体积或内存变化。
+
+请求设置 `stream: true`。服务返回 `text/event-stream` 时，`Decoder` 先按字节累积完整行，再解码 UTF-8，所以中文或 emoji 被网络拆开不会乱码。它支持 LF、CRLF、CR 换行、首行 BOM、多行 `data:`，忽略心跳和元数据字段，并限制未完成的行及事件缓冲大小。SSE 的行与事件边界见 [WHATWG 规范](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)。网络 chunk 不是 SSE 事件；同一 chunk 可以包含多个事件，一个事件也可以分散在多个 chunk 中。
+
+正文只读取 `choices` 中 `index == 0` 的 `delta.content`，角色、usage 和其他候选不显示。`[DONE]` 表示流正常结束；没有正文返回空结果错误，连接结束前缺少完整 `[DONE]`、或 `finish_reason` 为长度限制等非正常停止原因时返回未完成错误。非法 JSON、流中服务错误和超时也会结束等待，不回显服务端原始错误内容。若服务忽略流式请求而返回普通 JSON，则沿用完整响应解析，并作为一个片段交给面板；不自动重复请求。总超时仍为 60 秒。
+
+面板收到当前版本的 `TranslationDelta` 后，将片段追加到只读译文编辑器末尾，再恢复用户的光标和选择，不为每个片段重建整个编辑器。`String` 通过 `into()` 移入 Iced 的 `Edit::Paste` 所需的 `Arc<String>`，只用于符合控件接口，没有复制正文或引入共享可变状态。只有 `Translated` 才清除“翻译中”；失败时保留已收到的内容并显示错误。`import_and_translate` 只有在没有请求、没有错误且已有译文时才复用结果，所以再次捕获同一原文也能重试失败的半截译文。
+
+本地 HTTP 测试让服务器发送首段后等待客户端确认，再发送剩余片段与结束标记，验证内容确实在响应完成前交付；另覆盖任意分块点、Unicode、结束/错误顺序、空结果、超时和取消后关闭连接。面板测试验证追加时保留选择、过期片段与错误被忽略、失败重试，以及收起窗口后仍接受后续片段。这些测试不替代桌面上的实际逐段显示、滚动和焦点验证。
 
 ## 快捷键带入文本与取消任务
 
@@ -134,7 +148,7 @@ API Key 从 `Option<String>` 经 `as_deref()` 暂时借用为 `Option<&str>`，�
 
 初版不监听文件变化。服务及其配置由常驻进程持有，修改后需显式退出并重新启动；仅关闭窗口不会重新加载。运行步骤见 [中文 README](../README.zh-CN.md#修改配置)。
 
-新增依赖中，`reqwest` 负责 HTTP，关闭默认 feature，仅开启 JSON 与 rustls TLS；`serde`/`toml` 负责数据格式，`dirs` 统一 Windows、macOS 和 Linux 的配置目录，`tokio` 提供网络运行时和后台文件读取。`tempfile` 从测试依赖移到运行依赖，用于跨平台的临时文件清理和不覆盖目标的保存操作，没有新增锁文件中的版本；`serde_json` 仍用于测试和构建脚本。它们增加了依赖、构建和维护成本；当前未测量依赖带来的二进制体积、启动耗时和常驻内存变化。平台验证范围见 README，编译通过不能代替桌面实机验证。相关机制可参考 [Reqwest 客户端](https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html)、[Tokio 文件 I/O](https://docs.rs/tokio/1.48.0/tokio/fs/index.html) 和 [NamedTempFile::persist_noclobber](https://docs.rs/tempfile/latest/tempfile/struct.NamedTempFile.html#method.persist_noclobber)。
+新增依赖中，`reqwest` 负责 HTTP，关闭默认 feature，仅开启 JSON 与 rustls TLS；`serde`/`toml` 负责数据格式，`dirs` 统一 Windows、macOS 和 Linux 的配置目录，`tokio` 提供网络运行时和后台文件读取。`tempfile` 从测试依赖移到运行依赖，用于跨平台的临时文件清理和不覆盖目标的保存操作，没有新增锁文件中的版本；`serde_json` 同时用于流式 JSON 解析、测试和构建脚本。它们增加了依赖、构建和维护成本；当前未测量依赖带来的二进制体积、启动耗时和常驻内存变化。平台验证范围见 README，编译通过不能代替桌面实机验证。相关机制可参考 [Reqwest 客户端](https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html)、[Tokio 文件 I/O](https://docs.rs/tokio/1.48.0/tokio/fs/index.html) 和 [NamedTempFile::persist_noclobber](https://docs.rs/tempfile/latest/tempfile/struct.NamedTempFile.html#method.persist_noclobber)。
 
 AppImage 的边界位于 [打包脚本](../scripts/build-appimage.sh)：Rust 代码继续负责配置行为，脚本负责组装二进制、运行库、图标与桌面入口。`ldd` 只能发现链接时记录的依赖，winit 运行时用 `dlopen` 加载的 X11/Wayland 库需要显式列出。linuxdeploy 仅参与 Linux 打包，不成为 Rust 的运行依赖。工作流先做原有代码检查，再构建 release 产物并执行包内程序的启动检查。
 
@@ -160,15 +174,15 @@ macOS 的同一条边界位于 [DMG 打包脚本](../scripts/build-dmg.sh) 和 [
 2. 用户修改输入，面板版本增加。
 3. 请求 A 返回，版本不一致，因此忽略结果。
 
-这是结果有效性检查。底层请求是否仍在运行是另一个问题：当前版本检查并没有取消它，请求仍可能在后台运行至完成或 60 秒超时。超时会结束网络等待，版本检查则决定对应结果能否更新界面。
+`translation_task: Option<iced::task::Handle>` 负责另一件事：控制底层任务生命周期。发起请求时用 `Task::abortable` 取得句柄并设置 `abort_on_drop()`；`invalidate_translation` 把它设为 `None`，丢弃任务内的响应并停止网络读取。它不保证服务端模型也停止生成。已经进入消息队列的片段无法靠取消撤回，因此片段、完成和错误仍分别检查版本号及 `translating`。收起窗口不调用失效函数，面板和任务继续存在。
 
 ## 用类型区分成功和失败
 
-`Service::translate` 返回 `Result<String, translation::Error>`：`Ok` 包含译文，`Err` 包含失败原因。面板通过匹配结果决定更新输出还是保存错误。
+`Service::translate` 返回事件流；内部 `request` 返回 `Result<(), translation::Error>`。正文已经通过 `Delta(String)` 传出，`Finished(Ok(()))` 只表达完整结束，不再复制整份译文。`Finished(Err(error))` 保存失败原因，已到达的正文继续保留。
 
 面板的 `error: Option<translation::Error>` 表达另一层含义：当前可能有错误，也可能没有。`Option` 处理“有或无”，`Result` 处理一次操作的“成功或失败”。
 
-`Error` 区分配置、客户端初始化、超时、网络、HTTP 状态、响应格式和空译文。`map_err` 将底层错误转换为这些可处理的类别，`?` 在失败时提前返回，不以 panic 结束进程。服务加载失败时按钮保持禁用；一次请求失败则保留服务，用户可以重试。错误在 `view` 时按当前界面语言转换为文案，切换语言不会丢失错误状态。
+`Error` 区分配置、客户端初始化、超时、网络、HTTP 状态、响应格式、空译文和未完整结束。`map_err` 将底层错误转换为这些可处理的类别，`?` 在失败时提前返回，不以 panic 结束进程。服务加载失败时按钮保持禁用；一次请求失败则保留服务，用户可以重试。错误在 `view` 时按当前界面语言转换为文案，切换语言不会丢失错误状态。
 
 ## 从现有测试验证理解
 

@@ -31,9 +31,13 @@ fn enter_submits_without_editing_or_repeating_a_pending_request() {
         let revision = panel.revision;
         let _ = panel.update(message);
         assert_eq!(panel.revision, revision);
+        let _ = panel.update(Message::TranslationDelta {
+            revision,
+            delta: "你好\n世界".into(),
+        });
         let _ = panel.update(Message::Translated {
             revision,
-            result: Ok("你好\n世界".into()),
+            result: Ok(()),
         });
         assert_eq!(panel.output.text(), "你好\n世界");
     }
@@ -124,10 +128,7 @@ fn imported_text_invalidates_old_translations_without_submitting_a_request() {
     assert_eq!(panel.input.text(), "  新原文\n第二行\n");
     assert_eq!(panel.source_language, Language::English);
     assert!(!panel.translating);
-    for result in [
-        Ok("Old translation".into()),
-        Err(translation::Error::Network),
-    ] {
+    for result in [Ok(()), Err(translation::Error::Network)] {
         let _ = panel.update(Message::Translated {
             revision: old_revision,
             result,
@@ -208,9 +209,13 @@ fn automatic_translation_skips_empty_input_and_reuses_pending_or_completed_resul
     let revision = panel.revision;
     let _ = panel.import_and_translate("captured");
     assert_eq!(panel.revision, revision);
+    let _ = panel.update(Message::TranslationDelta {
+        revision,
+        delta: "译文".into(),
+    });
     let _ = panel.update(Message::Translated {
         revision,
-        result: Ok("译文".into()),
+        result: Ok(()),
     });
     let _ = panel.import_and_translate("captured");
     assert_eq!(panel.output.text(), "译文");
@@ -226,7 +231,7 @@ fn new_captured_text_replaces_a_request_and_failed_translations_can_be_retried()
     let _ = panel.import_and_translate("second");
     let second = panel.revision;
     assert_ne!(first, second);
-    for result in [Ok("old".into()), Err(translation::Error::Network)] {
+    for result in [Ok(()), Err(translation::Error::Network)] {
         let _ = panel.update(Message::Translated {
             revision: first,
             result,
@@ -388,9 +393,13 @@ fn new_clipboard_replaces_an_old_selection_and_repeated_activation_keeps_the_new
         snapshot: sources("old clipboard"),
     });
     let old_translation = app.panel.revision;
+    let _ = app.update(AppMessage::Panel(Message::TranslationDelta {
+        revision: old_translation,
+        delta: "旧译文".into(),
+    }));
     let _ = app.update(AppMessage::Panel(Message::Translated {
         revision: old_translation,
-        result: Ok("旧译文".into()),
+        result: Ok(()),
     }));
     let second = start_capture(&mut app);
     let _ = app.update(AppMessage::TextCaptured {
@@ -401,9 +410,13 @@ fn new_clipboard_replaces_an_old_selection_and_repeated_activation_keeps_the_new
     assert!(app.panel.translating);
     assert!(app.panel.output.is_empty());
     let current_translation = app.panel.revision;
+    let _ = app.update(AppMessage::Panel(Message::TranslationDelta {
+        revision: current_translation,
+        delta: "新译文".into(),
+    }));
     let _ = app.update(AppMessage::Panel(Message::Translated {
         revision: current_translation,
-        result: Ok("新译文".into()),
+        result: Ok(()),
     }));
     let third = start_capture(&mut app);
     let _ = app.update(AppMessage::TextCaptured {
@@ -558,7 +571,7 @@ fn request_failure_allows_retry_and_old_results_cannot_replace_new_request() {
 
     let _ = panel.update(Message::Translate);
     assert!(panel.error.is_none());
-    for result in [Ok("old".into()), Err(translation::Error::Network)] {
+    for result in [Ok(()), Err(translation::Error::Network)] {
         let _ = panel.update(Message::Translated {
             revision: first_revision,
             result,
@@ -567,9 +580,13 @@ fn request_failure_allows_retry_and_old_results_cannot_replace_new_request() {
         assert!(panel.error.is_none());
         assert!(panel.output.is_empty());
     }
+    let _ = panel.update(Message::TranslationDelta {
+        revision: panel.revision,
+        delta: "你好".into(),
+    });
     let _ = panel.update(Message::Translated {
         revision: panel.revision,
-        result: Ok("你好".into()),
+        result: Ok(()),
     });
     assert_eq!(panel.output.text(), "你好");
     assert!(!panel.translating);
@@ -577,7 +594,7 @@ fn request_failure_allows_retry_and_old_results_cannot_replace_new_request() {
 
 #[test]
 fn editing_input_discards_both_stale_success_and_stale_error() {
-    for result in [Ok("old".into()), Err(translation::Error::Timeout)] {
+    for result in [Ok(()), Err(translation::Error::Timeout)] {
         let mut panel = ready_panel();
         panel.input = text_editor::Content::with_text("Hello");
         let _ = panel.update(Message::Translate);
@@ -623,9 +640,13 @@ fn output_is_read_only_and_accepts_current_translation_results() {
         },
         ..App::default()
     };
+    let _ = app.update(AppMessage::Panel(Message::TranslationDelta {
+        revision: app.panel.revision,
+        delta: "你好，世界".into(),
+    }));
     let _ = app.update(AppMessage::Panel(Message::Translated {
         revision: app.panel.revision,
-        result: Ok("你好，世界".into()),
+        result: Ok(()),
     }));
     let _ = app.update(AppMessage::Panel(Message::OutputAction(
         text_editor::Action::Edit(text_editor::Edit::Insert('x')),
@@ -645,9 +666,13 @@ fn clearing_or_changing_direction_discards_in_flight_results() {
         };
         let revision = panel.revision;
         let _ = panel.update(action);
+        let _ = panel.update(Message::TranslationDelta {
+            revision,
+            delta: "过期的译文".into(),
+        });
         let _ = panel.update(Message::Translated {
             revision,
-            result: Ok("过期的译文".into()),
+            result: Ok(()),
         });
 
         assert!(panel.output.is_empty());
@@ -682,5 +707,173 @@ fn window_lifecycle_preserves_text_and_translation_direction() {
         assert_eq!(app.panel.input.text(), "Hello\nWorld");
         assert_eq!(app.panel.output.text(), "你好\n世界");
         assert_eq!(app.panel.source_language, Language::English);
+    }
+}
+
+#[test]
+fn streamed_deltas_append_while_preserving_selection_and_waiting_for_completion() {
+    let mut panel = ready_panel();
+    let _ = panel.import_and_translate("source");
+    let revision = panel.revision;
+    let _ = panel.update(Message::TranslationDelta {
+        revision,
+        delta: "你好".into(),
+    });
+    assert_eq!(panel.output.text(), "你好");
+    assert!(panel.translating);
+    assert!(!panel.can_translate());
+    assert!(panel.translation_task.is_some());
+    let _ = panel.update(Message::OutputAction(text_editor::Action::SelectAll));
+    let selected = panel.output.selection();
+    let cursor = panel.output.cursor();
+    let _ = panel.update(Message::TranslationDelta {
+        revision,
+        delta: "，世界\n第二行  ".into(),
+    });
+    assert_eq!(panel.output.text(), "你好，世界\n第二行  ");
+    assert_eq!(panel.output.selection(), selected);
+    assert_eq!(panel.output.cursor(), cursor);
+    // 相同原文仍在生成时不能清空当前内容或发起新请求。
+    let _ = panel.import_and_translate("source");
+    assert_eq!(panel.revision, revision);
+    let _ = panel.update(Message::Translated {
+        revision,
+        result: Ok(()),
+    });
+    assert!(!panel.translating);
+    assert!(panel.translation_task.is_none());
+    let _ = panel.update(Message::TranslationDelta {
+        revision,
+        delta: "too late".into(),
+    });
+    assert_eq!(panel.output.text(), "你好，世界\n第二行  ");
+    assert_eq!(panel.output.selection(), selected);
+}
+
+#[test]
+fn failed_partial_translation_can_be_retried_manually_or_by_recapturing_same_text() {
+    for recapture in [false, true] {
+        let mut panel = ready_panel();
+        let _ = panel.import_and_translate("source");
+        let revision = panel.revision;
+        let _ = panel.update(Message::TranslationDelta {
+            revision,
+            delta: "partial".into(),
+        });
+        let _ = panel.update(Message::Translated {
+            revision,
+            result: Err(translation::Error::IncompleteResponse),
+        });
+        assert_eq!(panel.output.text(), "partial");
+        assert!(panel.error.is_some());
+        assert!(panel.can_translate());
+        assert!(panel.translation_task.is_none());
+        if recapture {
+            let _ = panel.import_and_translate("source");
+        } else {
+            let _ = panel.update(Message::Translate);
+        }
+        assert!(panel.translating);
+        assert!(panel.error.is_none());
+        assert!(panel.output.is_empty());
+        assert_ne!(panel.revision, revision);
+        let _ = panel.update(Message::TranslationDelta {
+            revision,
+            delta: "old".into(),
+        });
+        let _ = panel.update(Message::Translated {
+            revision,
+            result: Ok(()),
+        });
+        assert!(panel.output.is_empty());
+        assert!(panel.translating);
+    }
+}
+
+#[test]
+fn invalidating_partial_translation_releases_task_and_rejects_all_queued_events() {
+    for action in [
+        Message::Clear,
+        Message::SwapLanguages,
+        Message::InputAction(text_editor::Action::Edit(text_editor::Edit::Insert('x'))),
+    ] {
+        let mut panel = ready_panel();
+        let _ = panel.import_and_translate("source");
+        let revision = panel.revision;
+        let _ = panel.update(Message::TranslationDelta {
+            revision,
+            delta: "partial".into(),
+        });
+        let _ = panel.update(action);
+        assert!(panel.translation_task.is_none());
+        for message in [
+            Message::TranslationDelta {
+                revision,
+                delta: "old".into(),
+            },
+            Message::Translated {
+                revision,
+                result: Ok(()),
+            },
+            Message::Translated {
+                revision,
+                result: Err(translation::Error::Network),
+            },
+        ] {
+            let _ = panel.update(message);
+            assert!(panel.output.is_empty());
+            assert!(panel.error.is_none());
+            assert!(!panel.translating);
+        }
+    }
+    let mut panel = ready_panel();
+    let _ = panel.import_and_translate("first");
+    let revision = panel.revision;
+    let _ = panel.update(Message::TranslationDelta {
+        revision,
+        delta: "partial".into(),
+    });
+    let _ = panel.import_and_translate("second");
+    let _ = panel.update(Message::TranslationDelta {
+        revision,
+        delta: "old".into(),
+    });
+    assert!(panel.output.is_empty());
+    assert!(panel.translating);
+}
+
+#[test]
+fn hiding_a_window_keeps_its_translation_stream_active() {
+    use crate::app::{ShortcutStatus, window::WindowState};
+    for wayland in [false, true] {
+        let id = iced::window::Id::unique();
+        let mut app = App {
+            panel: ready_panel(),
+            window: WindowState::Visible(id),
+            wayland,
+            shortcut_status: ShortcutStatus::Ready("Alt+Q".into()),
+            ..App::default()
+        };
+        let _ = app.panel.import_and_translate("source");
+        let revision = app.panel.revision;
+        let _ = app.update(AppMessage::Panel(Message::TranslationDelta {
+            revision,
+            delta: "part".into(),
+        }));
+        let _ = app.update(AppMessage::CloseRequested(id));
+        if wayland {
+            let _ = app.update(AppMessage::WindowClosed(id));
+        }
+        assert!(app.panel.translation_task.is_some());
+        let _ = app.update(AppMessage::Panel(Message::TranslationDelta {
+            revision,
+            delta: " two".into(),
+        }));
+        let _ = app.update(AppMessage::Panel(Message::Translated {
+            revision,
+            result: Ok(()),
+        }));
+        assert_eq!(app.panel.output.text(), "part two");
+        assert!(!app.panel.translating);
     }
 }

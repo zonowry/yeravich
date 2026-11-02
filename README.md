@@ -12,7 +12,9 @@ Desktop behavior has currently been tested only on Hyprland and macOS (Apple Sil
 
 ## Usage
 
-Start Yeravich, then press the shortcut while using another app. Selected or copied text is inserted into the left panel and translated automatically. The translation appears on the right. Click **Copy** to copy it.
+Start Yeravich, then press the shortcut while using another app. Selected or copied text is inserted into the left panel and translated automatically. The translation appears progressively on the right as the service sends it. Click **Copy** to copy the text received so far.
+
+AI translation requests streaming output by default; no configuration change is needed. Services that return a complete JSON response still work. Editing or clearing the source, or switching direction, cancels the current request. If a stream fails, the partial translation stays visible with an error and can be retried; hiding the window lets it continue. The existing 60-second request timeout still applies.
 
 You can also type or paste text manually. Press Enter to translate, or Shift+Enter to insert a line break. The ⇄ button at the top switches the translation direction; the language menu in the upper-right corner changes the interface language. Chinese system locales default to Chinese → English; other locales default to English → Chinese.
 

@@ -18,6 +18,7 @@ pub(super) struct TranslationPanel {
     output: text_editor::Content,
     revision: u64,
     translating: bool,
+    translation_task: Option<iced::task::Handle>,
     auto_translate_pending: bool,
     error: Option<translation::Error>,
 }
@@ -37,9 +38,13 @@ pub enum Message {
     Clear,
     Copy,
     Translate,
+    TranslationDelta {
+        revision: u64,
+        delta: String,
+    },
     Translated {
         revision: u64,
-        result: Result<String, translation::Error>,
+        result: Result<(), translation::Error>,
     },
 }
 
@@ -52,6 +57,7 @@ impl TranslationPanel {
             output: text_editor::Content::new(),
             revision: 0,
             translating: false,
+            translation_task: None,
             auto_translate_pending: false,
             error: None,
         }
@@ -71,6 +77,8 @@ impl TranslationPanel {
     }
 
     fn invalidate_translation(&mut self) {
+        // 释放 abort_on_drop 句柄会取消网络读取；已排队的消息仍需检查 revision。
+        self.translation_task = None;
         self.revision += 1;
         self.output = text_editor::Content::new();
         self.translating = false;
